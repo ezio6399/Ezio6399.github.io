@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>線上代碼測試</title>
+<meta name="keywords" content="測試代碼,Html測試,Javascript測試,Iframe測試,CSS測試,Script測試" />
+<meta name="description" content="HTML﹑Javascript﹑Iframe﹑CSS﹑Script﹑代碼測試工具" />
+<script type="a6c54dd0d53baaa0821e026b-text/javascript" src="/1-theme/swfjs/showhide.js"></script>
+<script type="a6c54dd0d53baaa0821e026b-text/javascript" src="/1-theme/swfjs/disnone.js"></script>
+<link rel="stylesheet" type="text/css" href="/1-theme/ifreesite/style.css" />
+<link rel="stylesheet" type="text/css" href="/1-theme/ifreesite/style-mini.css" />
+<meta name="author" content="Jack! and I.T Team" />
+<meta name="copyright" content="Online Tools." />
+<meta name="viewport" content="width=device-width" />
+<meta property="fb:app_id" content="174908615894115" />
+<meta property="fb:admins" content="1801384463" />
+<meta property="og:image" content="https://www.ifreesite.com/tool.png" />
+<!-- Popup Begin -->
+<link type="text/css" rel="stylesheet" href="/1-theme/popup/highslide.css" />
+<script type="a6c54dd0d53baaa0821e026b-text/javascript" src="/1-theme/popup/highslide-full.js"></script>
+<!-- Popup Flash Use Begin -->
+<script type="a6c54dd0d53baaa0821e026b-text/javascript" src="//ajax.googleapis.com/ajax/libs/swfobject/2.1/swfobject.js"></script>
+<!-- Popup Flash Use End -->
+<script type="a6c54dd0d53baaa0821e026b-text/javascript">
+    hs.graphicsDir = '/1-theme/popup/graphics/';
+    hs.outlineType = 'beveled';
+    hs.showCredits = false;
+	hs.headingEval = 'this.a.title';
+	hs.loadingText = '讀取中...';
+	hs.loadingTitle = '按此取消';
+	hs.resizeTitle = '調整大小';
+	// Add black close button
+	hs.registerOverlay({
+	slideshowGroup: 'group1',
+	html: '<div class="closebutton-black" onclick="return hs.close(this)" title="隱藏/關閉"></div>',
+	position: 'top right',
+	fade: 2, 
+	useOnHtml: true
+	});
+</script>
+<style type="text/css">
+/* CSS for removing the Move and Close text */
+.highslide-header .highslide-move, .highslide-header .highslide-close {
+	display: none;
+}
+/* CSS for the close buttons */
+.closebutton-black {
+	position: relative;
+	top: -15px;
+	left: 15px;
+	width: 30px;
+	height: 30px;
+	cursor: pointer;
+	background: url(/1-theme/popup/graphics/close.png);
+	/* NOTE! For IE6, you also need to update the highslide-ie6.css file. */
+}
+</style>
+<!-- Popup End -->
+<!-- Copy Begin -->
+<!-- <script type="module" src="/1-theme/zcopy/index.js"></script> -->
+<script type="a6c54dd0d53baaa0821e026b-module" src="https://unpkg.com/@github/clipboard-copy-element@latest"></script>
+<script type="a6c54dd0d53baaa0821e026b-text/javascript">
+  document.addEventListener('clipboard-copy', function (event) {
+   const clipboardne = event.target.querySelector('.clipboardne')
+    announcetws.setAttribute('aria-label', 'Copied');
+     clipboardne.hidden = false
+      setTimeout(function () {
+       announcetws.setAttribute('aria-label', '');
+        clipboardne.hidden = true
+         }, 1000)
+          })
+</script>
+<div aria-live="polite" id="announcetws"><!-- Copy Notice --></div>
+<!-- Copy End -->
+<!-- Sound Button Begin -->
+<script type="a6c54dd0d53baaa0821e026b-text/javascript">
+	function soundxyv(ydanp) { //Voice1
+	var yp= ydanp.split(" ");
+	var audio = document.createElement('audio');
+audio.src = "https://01.ifreesite.com/"+yp[0]+".mp3";
+  audio.play();
+	var count=0;
+audio.addEventListener("ended", function() {
+    count ++;
+    audio.src = "https://01.ifreesite.com/"+yp[count]+".mp3";//"sat1.mp3";
+   if(count>yp.length-1) {count=0;}
+    else {audio.play(); }
+   },false);
+   }
+//-------------------------
+    function soundxzv(ydanp) { //Voice2
+	var yp= ydanp.split(" ");
+//	alert("ydanp="+ydanp);
+	var audio = document.createElement('audio');
+audio.src = "https://www.ifreesite.com/"+yp[0]+".mp3";
+  audio.play();
+	var count=0;
+audio.addEventListener("ended", function() {
+    count ++;
+    audio.src = "https://www.ifreesite.com/"+yp[count]+".mp3";//"sat1.mp3";
+   if(count>yp.length-1) {count=0;}
+    else {audio.play(); }
+   },false);
+}
+//------------------------
+
+//---------------------
+	var appendixPopup = null;
+	 function MM_openBrWindow(theURL,winName,features) {
+   if (appendixPopup && !appendixPopup.closed) {
+	 appendixPopup.close();
+ 	}
+	 appendixPopup = window.open(theURL,winName,features);
+	}
+</script>
+<!-- Sound Button End -->
+<!-- Google Analytic Begin -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DEDGV3L0VY" type="a6c54dd0d53baaa0821e026b-text/javascript"></script>
+<script type="a6c54dd0d53baaa0821e026b-text/javascript">
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-DEDGV3L0VY');
+</script>
+<!-- Google Analytic End -->
+<!-- Page-level Ads Begin -->
+<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" type="a6c54dd0d53baaa0821e026b-text/javascript"></script>
+<script type="a6c54dd0d53baaa0821e026b-text/javascript">
+  (adsbygoogle = window.adsbygoogle || []).push({
+    google_ad_client: "ca-pub-4355432878324120",
+    enable_page_level_ads: true
+  });
+</script>
+<!-- Page-level Ads End -->
+</head>
+<body>
+<div id="if_container">
+  <header id="if_mainboxa" role="banner">
+    <div class="if_menu">
+      <ul>
+        <li class="if_menua">
+          <label class="if_menulabela"><img src="/1-theme/ifreesite/image/ia.png" />
+          </label>
+          <span><a href="/" title="線上工具｜網路資源" rel="home">主頁</a></span>
+        </li><li class="if_menub">
+          <label class="if_menulabelb"><img src="/1-theme/ifreesite/image/ib.png" />
+          </label>
+          <span><a href="//www.fmyeah.com" title="廣播電台線上收聽 | 電視直播在線收看" target="_blank">視聽樂</a></span>
+        </li><li class="if_menuc">
+          <label class="if_menulabelc"><img src="/1-theme/ifreesite/image/ic.png" />
+          </label>
+          <span><a href="//www.moonlol.com" title="月光部落 | 月亮下的碎碎唸唸" target="_blank">月光部落</a></span>
+        </li>
+      </ul>
+    </div>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" type="a6c54dd0d53baaa0821e026b-text/javascript"></script>
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-4355432878324120"
+     data-ad-slot="2021560894"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+<script type="a6c54dd0d53baaa0821e026b-text/javascript">
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<script type="a6c54dd0d53baaa0821e026b-text/javascript"><!--
+//儲存代碼
+function saveCode(obj) {
+ if(document.all){
+ var winname = window.open('','_blank','top=10000');
+ var code=obj.value;
+ winname.opener = null;
+ winname.document.write(code);
+ winname.document.execCommand('saveas','','code.htm');
+ winname.close();
+ }
+}
+ 
+function goto1(ln){
+ if(!/^\d+$/.test(ln)) return;
+ var obj = document.getElementById("tt");
+ var rng = obj.createTextRange();
+ var arr = obj.value.replace(/\r/,"").split(/\n/);
+ if(ln>arr.length) ln = arr.length;
+ var str_tmp = "";
+ for(var i=0;i<ln-1;i++) {
+  str_tmp += arr[i];
+ }
+ rng.moveStart('character',str_tmp.length+1);
+ str_tmp = "";
+ for(i=ln;i<arr.length;i++) {
+  str_tmp += arr[i];
+ }
+ rng.moveEnd('character',-str_tmp.length);
+ rng.select();
+}
+ 
+var isDebug=0;
+function runCode(obj){
+var code=obj.value;
+newwin=window.open('','','');
+if(isDebug){
+newwin.document.writeln("<script>");
+newwin.document.writeln("function reportError(msg,url,line){\nline-=14;\nvar str='出錯了: \\n\\n';\nstr+='錯誤: '+msg+' 行: '+(line);\nalert(str);\nopener.goto1(line);\nopener.focus();\nwindow.onerror=null;\nsetTimeout('self.close()',10);\nreturn true;\n}");
+newwin.document.writeln("window.onerror = reportError;");
+newwin.document.writeln("<\/script>");
+}
+//newwin.opener = null 
+newwin.document.write(code);
+newwin.document.close();
+}
+document.onkeydown=function(e){
+var e=e||window.event;
+if(e.ctrlKey == true && e.keyCode == 71){
+goto1(prompt('請輸入要轉到的行：','10'));
+return false;
+}
+}
+//-->
+</script>
+    <nav class="navmenu" role="navigation">
+      <ul>
+        <li class="nava">
+		<a href="/css-formatting.htm" title="CSS格式化">CSS 格式化</a>
+		</li>
+        <li class="navb">
+		<a href="/js-html-formatting" title="Html&JS格式化">Html&JS格式化</a>
+		</li>
+        <li class="navc">
+		<a href="/htmlcodecov" title="Html代碼轉換器">Html 代碼轉換器</a>
+		</li>
+		<li class="navf">
+		<a href="/unicode" title="UTF8轉換Unicode">UTF-8編碼轉換</a>
+		</li>
+		<li class="nave">
+		<a href="/html-entities.htm" title="HTML特殊字元">HTML特殊字符</a>
+		</li>
+      </ul>
+	 </nav>
+  </header>
+  <section id="if_mainboxb" role="main">
+    <div class="if_synopsib">
+      <div class="if_synopsis">
+	  線上代碼測試
+	  </div>
+      <p class="tbi">代碼測試工具支持 Html﹑Javascript﹑Iframe﹑CSS﹑Script 等程式語言。</p>
+    </div>
+<!-- ads
+<br /> -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" type="a6c54dd0d53baaa0821e026b-text/javascript"></script>
+<ins class="adsbygoogle if_adslot"
+     style="display:inline-block"
+     data-ad-client="ca-pub-4355432878324120"
+     data-ad-slot="7082315882"
+     data-ad-format="auto"
+     data-full-width-responsive="false"></ins>
+<script type="a6c54dd0d53baaa0821e026b-text/javascript">
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br />
+<div class="toolbo">
+    <div class="tooltexp">
+        <div class="boxbox">
+            <form>
+                <textarea name="tt" id="tt">
+&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"&gt;
+&lt;html xmlns="http://www.w3.org/1999/xhtml" lang="zh-TW"&gt;
+&lt;head&gt;
+&lt;meta http-equiv="Content-Type" content="text/html;charset=utf-8" /&gt;
+&lt;title&gt;代碼預覽&lt;/title&gt;
+&lt;script type="text/javascript"&gt;
+&lt;/script&gt;
+&lt;style type="text/css"&gt;
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+</textarea>
+<input type="button" id="runButton" value="執行代碼" accesskey="R" onClick="if (!window.__cfRLUnblockHandlers) return false; runCode(document.getElementById('tt'))" class="tops" data-cf-modified-a6c54dd0d53baaa0821e026b-="" />
+            </form>
+        </div>
+    </div>
+</div>
+  </section>
+  <section id="if_mainboxc" role="complementary">
+   <div class="if_foads">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" type="a6c54dd0d53baaa0821e026b-text/javascript"></script>
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-format="autorelaxed"
+     data-ad-client="ca-pub-4355432878324120"
+     data-ad-slot="3184445236"></ins>
+<script type="a6c54dd0d53baaa0821e026b-text/javascript">
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+   </div>
+   <!-- PO --><div class="hey">
+國徽（盾徽）代表著一個國家的主權，象徵著人民的傳統風格及民族精神。 <a href="//www.ifreesite.com/world/coat-of-arms.htm" target="_blank">點此看 »</a>
+</div>
+  </section>
+  <footer id="if_mainboxd" class="if_colophon" role="contentinfo">
+    <div class="if_footer_box">
+      <div id="if_flk" class="if_footery">
+        <a href="/" title="線上工具｜網路資源" rel="home">線上工具</a> <span class="if_pipe">|</span> <a href="/sitemap.htm" title="網站地圖">Sitemap</a> <span class="if_pipe">|</span> <a href="//www.addus.info" title="聯絡我們">聯絡我們</a> <span class="if_pipe">|</span> <a href="/emoji" title="Emoji(表情圖示)">繪文字</a> <span class="if_pipe">|</span> <a href="/x/c/wishing-tree" title="Wishing Tree"><font color="#F9F900">許</font><font color="#FFE153">願</font><font color="#A8FF24">樹</font></a>
+        <div class="if_xs0">
+		Copyright &copy;2025 Online Tools,All Rights Reserved. <span class="if_scrolltop" onClick="if (!window.__cfRLUnblockHandlers) return false; window.scrollTo(0,0);return false;" title="回頂部" style="cursor:pointer" data-cf-modified-a6c54dd0d53baaa0821e026b-=""><strong>TOP</strong></span>
+        </div>
+      </div>
+      <div id="if_frt">
+        <div class="a2a_kit a2a_kit_size_32 a2a_default_style">
+          <a class="a2a_button_google_gmail" title="@Gmail 郵件分享!"></a>
+          <a class="a2a_button_facebook" title="分享至 Facebook"></a>
+          <a class="a2a_button_twitter" title="Twitter! 推特"></a>
+          <a class="a2a_button_whatsapp" title="WhatsApp Send"></a>
+		  <a class="a2a_button_telegram" title="Telegram 分享"></a>
+          <a class="a2a_button_wechat" title="WeChat 微信"></a>
+          <a class="a2a_button_line" title="Line Messages"></a>
+          <a class="a2a_dd" href="//www.addtoany.com/share" title="更多! More..."></a>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+<!-- AddToAny Begin -->
+<script type="a6c54dd0d53baaa0821e026b-text/javascript" src="//static.addtoany.com/menu/page.js"></script>
+<!-- AddToAny End -->
+<script src="/cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="a6c54dd0d53baaa0821e026b-|49" defer></script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b520a263ea35f02',t:'MTc2NjkzNTIwNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
