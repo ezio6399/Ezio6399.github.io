@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title id="pageTitle">烤魚大師 POS 系統</title>
+    <title id="pageTitle">烤魚大師 Pro POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -11,10 +11,12 @@
         .tab-content { display: none; }
         .tab-content.active { display: flex; }
         #printArea { display: none; }
-        
-        /* 針對手機端的滾動優化 */
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        /* KDS 卡片動畫 */
+        .kds-card { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         @media print {
             body * { visibility: hidden !important; }
@@ -25,120 +27,75 @@
         }
     </style>
 </head>
-<body class="bg-slate-50 h-screen flex flex-col font-sans overflow-hidden">
+<body class="bg-slate-100 h-screen flex flex-col overflow-hidden">
 
-<header class="bg-slate-900 text-white h-16 flex items-center justify-between px-4 md:px-6 no-print flex-shrink-0 shadow-lg z-50">
-    <div class="flex items-center space-x-3 md:space-x-6">
-        <span id="displayStoreName" class="text-lg md:text-xl font-black bg-blue-600 px-3 py-1 rounded tracking-tighter truncate max-w-[120px] md:max-w-none">POS</span>
+<header class="bg-slate-900 text-white h-16 flex items-center justify-between px-4 no-print flex-shrink-0 shadow-lg z-50">
+    <div class="flex items-center space-x-2 md:space-x-6">
+        <span id="displayStoreName" class="text-lg font-black bg-blue-600 px-3 py-1 rounded tracking-tighter">PRO POS</span>
         <nav class="flex space-x-1 text-xs md:text-sm font-bold">
             <button onclick="showTab('orderTab')" class="px-2 md:px-4 py-2 rounded-md hover:bg-slate-800 transition">點餐</button>
+            <button onclick="showTab('kdsTab')" class="px-2 md:px-4 py-2 rounded-md hover:bg-slate-800 transition text-orange-400" id="navKds">廚房(KDS)</button>
             <button onclick="showTab('reportTab')" class="px-2 md:px-4 py-2 rounded-md hover:bg-slate-800 transition text-slate-400" id="navReport">報表</button>
             <button onclick="showTab('adminTab')" class="px-2 md:px-4 py-2 rounded-md hover:bg-slate-800 transition text-slate-400" id="navAdmin">設定</button>
         </nav>
     </div>
-    <div class="flex items-center space-x-2 md:space-x-4">
-        <div id="digitalClock" class="font-mono text-slate-400 text-xs md:text-sm hidden sm:block">00:00:00</div>
-        <span class="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-1 rounded border border-emerald-500/30 font-bold whitespace-nowrap">內用模式</span>
-    </div>
+    <div id="digitalClock" class="font-mono text-slate-400 text-xs hidden sm:block">00:00:00</div>
 </header>
 
 <main class="flex-1 flex overflow-hidden relative">
     
     <div id="orderTab" class="tab-content active flex-1 flex flex-col lg:flex-row w-full h-full overflow-hidden">
-        
-        <div class="flex-1 p-4 md:p-6 overflow-y-auto custom-scrollbar">
-            <div class="flex justify-between items-center mb-4 md:mb-6">
-                <h2 class="text-xl md:text-2xl font-black text-slate-800">精選餐點</h2>
-            </div>
-            <div id="menuDisplay" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
-                </div>
-            <div class="h-32 lg:hidden"></div>
+        <div class="flex-1 p-4 overflow-y-auto custom-scrollbar">
+            <div id="menuDisplay" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3"></div>
+            <div class="h-24 lg:hidden"></div>
         </div>
-
-        <div id="sidebar" class="fixed inset-y-0 right-0 transform translate-x-full lg:translate-x-0 lg:static lg:inset-auto w-80 md:w-96 bg-white border-l shadow-2xl flex flex-col no-print transition-transform duration-300 z-[60] lg:z-0">
-            <div class="p-4 md:p-6 bg-slate-50 border-b flex justify-between items-center">
-                <div class="flex flex-col">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Queue</span>
-                    <span class="text-xl md:text-2xl font-black text-blue-600">NO. <span id="nextQueueNo">001</span></span>
-                </div>
-                <div class="flex items-center space-x-2">
-                    <button onclick="clearCart()" class="text-slate-400 hover:text-red-500 text-xs font-bold border px-3 py-1 rounded-lg transition">清空</button>
-                    <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 text-xl px-2">✕</button>
-                </div>
+        <div id="sidebar" class="fixed inset-y-0 right-0 transform translate-x-full lg:translate-x-0 lg:static lg:inset-auto w-80 md:w-96 bg-white border-l shadow-2xl flex flex-col transition-transform duration-300 z-[60] lg:z-0">
+            <div class="p-6 bg-slate-50 border-b flex justify-between items-center">
+                <span class="text-2xl font-black text-blue-600">NO. <span id="nextQueueNo">001</span></span>
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-400">✕</button>
             </div>
-            
-            <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-                </div>
-
-            <div class="p-6 pb-10 md:pb-12 bg-slate-50 space-y-4 border-t shadow-[0_-4px_10px_rgba(0,0,0,0.03)]">
-                <div class="flex justify-between items-center text-2xl md:text-3xl font-black">
-                    <span class="text-slate-800 text-base md:text-lg">總額</span>
+            <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar"></div>
+            <div class="p-6 bg-slate-50 border-t space-y-4">
+                <div class="flex justify-between items-center text-3xl font-black">
+                    <span class="text-lg text-slate-500">總額</span>
                     <span class="text-blue-600">$<span id="totalPrice">0</span></span>
                 </div>
-                <button onclick="oneClickPrint()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 md:py-6 rounded-2xl font-black text-lg md:text-xl shadow-xl transition active:scale-95">
-                    確認結帳並出單
-                </button>
+                <button onclick="oneClickPrint()" class="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition">確認結帳並出單</button>
             </div>
         </div>
-
-        <button onclick="toggleSidebar()" class="lg:hidden fixed bottom-6 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center z-50 animate-bounce">
-            <span class="text-xl">🛒</span>
-            <span id="mobileCartCount" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-6 h-6 rounded-full flex items-center justify-center border-2 border-white">0</span>
+        <button onclick="toggleSidebar()" class="lg:hidden fixed bottom-6 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center z-50">
+            🛒 <span id="mobileCartCount" class="ml-1 text-xs">0</span>
         </button>
     </div>
 
-    <div id="reportTab" class="tab-content flex-1 p-4 md:p-8 bg-slate-100 overflow-y-auto hidden flex-col">
-        <div class="max-w-5xl mx-auto w-full">
-            <div class="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-4 md:p-6 rounded-3xl shadow-sm border border-slate-200 gap-4">
-                <input type="date" id="reportDate" onchange="renderReport()" class="w-full md:w-auto border p-2 rounded-xl font-bold">
-                <button onclick="exportToExcel()" class="w-full md:w-auto bg-emerald-600 text-white px-8 py-2 rounded-xl font-bold">匯出 Excel</button>
+    <div id="kdsTab" class="tab-content flex-1 p-4 bg-slate-800 overflow-x-auto hidden">
+        <div id="kdsContainer" class="flex space-x-4 h-full items-start">
             </div>
-            
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-8 text-center">
-                <div class="bg-white p-4 md:p-6 rounded-3xl shadow-sm border">
-                    <p class="text-slate-400 font-bold text-xs uppercase">總營收</p>
-                    <p class="text-2xl md:text-3xl font-black text-blue-600">$<span id="totalRevenue">0</span></p>
-                </div>
-                <div class="bg-white p-4 md:p-6 rounded-3xl shadow-sm border">
-                    <p class="text-slate-400 font-bold text-xs uppercase">成交單數</p>
-                    <p class="text-2xl md:text-3xl font-black text-slate-800" id="totalOrders">0</p>
-                </div>
-                <div class="bg-white p-4 md:p-6 rounded-3xl shadow-sm border">
-                    <p class="text-slate-400 font-bold text-xs uppercase text-slate-400">客單均價</p>
-                    <p class="text-2xl md:text-3xl font-black text-slate-800">$<span id="avgOrder">0</span></p>
-                </div>
-            </div>
+    </div>
 
-            <div class="bg-white rounded-3xl shadow-sm border overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left min-w-[600px]">
-                        <thead class="bg-slate-50 border-b text-slate-400 text-xs font-bold uppercase">
-                            <tr><th class="px-6 py-4">時間</th><th class="px-6 py-4">取單號</th><th class="px-6 py-4">單號</th><th class="px-4 md:px-6 py-4 text-right">金額</th><th class="px-6 py-4 text-center">操作</th></tr>
-                        </thead>
-                        <tbody id="reportTableBody" class="divide-y divide-slate-100 text-sm font-medium"></tbody>
-                    </table>
-                </div>
+    <div id="reportTab" class="tab-content flex-1 p-6 overflow-y-auto hidden flex-col">
+        <div class="max-w-5xl mx-auto w-full">
+            <div class="grid grid-cols-3 gap-4 mb-6 text-center">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border font-bold">總營收: $<span id="totalRevenue">0</span></div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border font-bold">單數: <span id="totalOrders">0</span></div>
+                <button onclick="exportToExcel()" class="bg-emerald-600 text-white rounded-2xl font-bold">匯出 Excel</button>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                <table class="w-full text-left"><tbody id="reportTableBody"></tbody></table>
             </div>
         </div>
     </div>
 
-    <div id="adminTab" class="tab-content flex-1 p-4 md:p-8 bg-white overflow-y-auto hidden flex-col">
-        <div class="max-w-xl mx-auto w-full space-y-8">
-            <section>
-                <h2 class="text-xl md:text-2xl font-black mb-4 md:mb-6 border-l-8 border-blue-600 pl-4">品牌設定</h2>
-                <div class="bg-slate-50 p-4 md:p-6 rounded-2xl border space-y-4">
-                    <input type="text" id="cfgStoreName" placeholder="店名" class="w-full p-3 md:p-4 border rounded-xl font-bold">
-                    <input type="text" id="cfgPhone" placeholder="電話" class="w-full p-3 md:p-4 border rounded-xl font-bold">
-                    <button onclick="saveStoreSettings()" class="w-full bg-slate-800 text-white py-3 rounded-xl font-bold">儲存</button>
+    <div id="adminTab" class="tab-content flex-1 p-6 overflow-y-auto hidden flex-col">
+        <div class="max-w-2xl mx-auto w-full space-y-8">
+            <section class="bg-white p-6 rounded-2xl border shadow-sm">
+                <h2 class="text-xl font-black mb-4 border-l-4 border-blue-600 pl-2">餐點與庫存管理</h2>
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <input type="text" id="newProdName" placeholder="品名" class="border p-2 rounded-lg col-span-1">
+                    <input type="number" id="newProdPrice" placeholder="價格" class="border p-2 rounded-lg col-span-1">
+                    <input type="number" id="newProdStock" placeholder="初始庫存" class="border p-2 rounded-lg col-span-1">
                 </div>
-            </section>
-            <section>
-                <h2 class="text-xl md:text-2xl font-black mb-4 md:mb-6 border-l-8 border-green-600 pl-4">菜單管理</h2>
-                <div class="flex flex-col sm:flex-row gap-2 mb-4">
-                    <input type="text" id="newProdName" placeholder="產品名稱" class="flex-1 p-3 border rounded-xl">
-                    <input type="number" id="newProdPrice" placeholder="價格" class="w-full sm:w-24 p-3 border rounded-xl">
-                    <button onclick="addProduct()" class="bg-green-600 text-white px-6 py-3 rounded-xl font-bold">新增</button>
-                </div>
+                <button onclick="addProduct()" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold mb-4">新增餐點</button>
                 <div id="menuListUI" class="space-y-2"></div>
             </section>
         </div>
@@ -148,156 +105,194 @@
 <div id="printArea"></div>
 
 <script>
-    let settings = JSON.parse(localStorage.getItem('pos_settings')) || { storeName: '烤魚大師', phone: '02-12345678' };
-    let menu = JSON.parse(localStorage.getItem('pos_menu')) || [{ name: '招牌烤魚', price: 880 }];
-    let sales = JSON.parse(localStorage.getItem('pos_sales')) || [];
+    // 資料結構初始化
+    let settings = JSON.parse(localStorage.getItem('pos_settings_pro')) || { storeName: '烤魚大師', phone: '02-1234' };
+    let menu = JSON.parse(localStorage.getItem('pos_menu_pro')) || [{ name: '招牌烤魚', price: 880, stock: 10 }];
+    let sales = JSON.parse(localStorage.getItem('pos_sales_pro')) || [];
+    let kdsOrders = JSON.parse(localStorage.getItem('pos_kds_pro')) || []; // 存放廚房進行中的單
     let cart = [];
 
     function init() {
-        document.getElementById('displayStoreName').innerText = settings.storeName;
-        document.getElementById('pageTitle').innerText = settings.storeName + " POS";
-        document.getElementById('cfgStoreName').value = settings.storeName;
-        document.getElementById('cfgPhone').value = settings.phone;
-        document.getElementById('reportDate').valueAsDate = new Date();
         updateQueueNo();
         renderOrderMenu();
         renderCart();
-    }
-
-    function toggleSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        sidebar.classList.toggle('translate-x-full');
+        document.getElementById('displayStoreName').innerText = settings.storeName;
+        setInterval(updateKDSTimers, 1000); // 每一秒更新廚房單時間
     }
 
     function showTab(id) {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        ['navReport', 'navAdmin'].forEach(navId => document.getElementById(navId).classList.add('text-slate-400'));
-        if(id === 'reportTab') { renderReport(); document.getElementById('navReport').classList.remove('text-slate-400'); }
-        if(id === 'adminTab') { renderAdmin(); document.getElementById('navAdmin').classList.remove('text-slate-400'); }
-        // 切換頁面時關閉手機版側邊欄
-        document.getElementById('sidebar').classList.add('translate-x-full');
+        if(id === 'kdsTab') renderKDS();
+        if(id === 'reportTab') renderReport();
+        if(id === 'adminTab') renderAdmin();
     }
 
-    function updateQueueNo() {
-        const today = new Date().toISOString().split('T')[0];
-        const todaySales = sales.filter(s => s.date.split('T')[0] === today);
-        const nextNo = (todaySales.length + 1).toString().padStart(3, '0');
-        document.getElementById('nextQueueNo').innerText = nextNo;
-    }
-
+    // --- 點餐與庫存邏輯 ---
     function renderOrderMenu() {
-        document.getElementById('menuDisplay').innerHTML = menu.map(p => `
-            <div onclick="addToCart('${p.name}', ${p.price})" class="item-card bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-sm border border-slate-100 cursor-pointer hover:border-blue-500 transition h-28 md:h-32 flex flex-col justify-between">
-                <span class="font-bold text-slate-700 text-sm md:text-lg leading-tight">${p.name}</span>
-                <span class="text-blue-600 font-black text-base md:text-xl">$${p.price}</span>
-            </div>
-        `).join('');
+        document.getElementById('menuDisplay').innerHTML = menu.map(p => {
+            const isOut = p.stock <= 0;
+            return `
+            <div onclick="${isOut ? '' : `addToCart('${p.name}', ${p.price})`}" 
+                 class="${isOut ? 'bg-gray-200 opacity-50 cursor-not-allowed' : 'bg-white cursor-pointer hover:border-blue-500'} p-4 rounded-2xl shadow-sm border transition flex flex-col justify-between h-32 relative">
+                <span class="font-bold text-slate-700">${p.name}</span>
+                <div class="flex justify-between items-end">
+                    <span class="text-blue-600 font-black">$${p.price}</span>
+                    <span class="text-[10px] ${p.stock < 5 ? 'text-red-500 font-bold' : 'text-slate-400'}">庫存: ${p.stock}</span>
+                </div>
+                ${isOut ? '<span class="absolute inset-0 flex items-center justify-center font-black text-red-500 rotate-12 text-xl">已售完</span>' : ''}
+            </div>`;
+        }).join('');
     }
 
-    function addToCart(name, price) { 
-        cart.push({name, price}); 
+    function addToCart(name, price) {
+        const item = menu.find(m => m.name === name);
+        const inCartCount = cart.filter(c => c.name === name).length;
+        if (inCartCount >= item.stock) return alert('庫存不足！');
+        cart.push({name, price});
         renderCart();
-        // 手機版加入後可以給個簡單反饋，或者不自動跳轉
     }
 
     function renderCart() {
         const container = document.getElementById('cartItems');
         document.getElementById('mobileCartCount').innerText = cart.length;
-        if(cart.length === 0) {
-            container.innerHTML = `<div class="text-center py-20 text-slate-300">請選取餐點</div>`;
-            document.getElementById('totalPrice').innerText = '0';
-            return;
-        }
         container.innerHTML = cart.map((item, idx) => `
-            <div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100 text-sm">
-                <span class="font-bold text-slate-700 truncate mr-2">${item.name}</span>
-                <div class="flex items-center space-x-3 flex-shrink-0">
-                    <span class="font-bold text-slate-500">$${item.price}</span>
-                    <button onclick="removeFromCart(${idx})" class="w-7 h-7 bg-white text-red-500 rounded-full shadow-sm flex items-center justify-center font-bold">✕</button>
+            <div class="flex justify-between items-center bg-slate-50 p-2 rounded-lg border text-sm">
+                <span class="font-bold">${item.name}</span>
+                <div class="flex items-center space-x-2">
+                    <span>$${item.price}</span>
+                    <button onclick="cart.splice(${idx},1);renderCart()" class="text-red-500 px-2 font-bold">✕</button>
                 </div>
-            </div>
-        `).join('');
+            </div>`).join('');
         document.getElementById('totalPrice').innerText = cart.reduce((s, i) => s + i.price, 0).toLocaleString();
     }
 
-    function removeFromCart(i) { cart.splice(i,1); renderCart(); }
-    function clearCart() { if(confirm('確定清空？')) { cart = []; renderCart(); } }
-
     function oneClickPrint() {
-        if(cart.length === 0) return alert('尚未點餐');
-        const total = cart.reduce((s, i) => s + i.price, 0);
-        const orderId = Date.now().toString().slice(-6);
+        if(cart.length === 0) return;
         const queueNo = document.getElementById('nextQueueNo').innerText;
+        const orderId = Date.now().toString().slice(-6);
         const now = new Date();
-
-        const kitchenHTML = `<div class="print-page"><h1 style="text-align:center; font-size:24px; border:2px solid #000; margin-bottom:5px;">取單號：${queueNo}</h1><ul style="font-size:18px; list-style:none; padding:0;">${cart.map(i => `<li style="border-bottom:1px solid #eee; padding:5px 0;">□ ${i.name}</li>`).join('')}</ul><p style="font-size:10px;">時間: ${now.toLocaleString()}</p></div>`;
-        const receiptHTML = `<div class="print-page" style="border-top:1px dashed #000; padding-top:10px;"><h2 style="text-align:center; margin:0;">${settings.storeName}</h2><p style="text-align:center; font-size:10px;">${settings.phone}</p><div style="font-size:13px; font-weight:bold; text-align:center; background:#eee; padding:5px; margin:5px 0;">取單編號：${queueNo}</div><table style="width:100%; font-size:13px; border-bottom:1px solid #000;">${cart.map(i => `<tr><td>${i.name}</td><td style="text-align:right">$${i.price}</td></tr>`).join('')}</table><h2 style="text-align:right;">總計: $${total}</h2></div>`;
-
-        document.getElementById('printArea').innerHTML = kitchenHTML + receiptHTML;
-        sales.push({ date: now.toISOString(), total, queueNo: queueNo, orderId, items: [...cart] });
-        localStorage.setItem('pos_sales', JSON.stringify(sales));
         
-        setTimeout(() => { 
-            window.print(); 
-            cart = []; 
-            renderCart();
-            updateQueueNo();
-            if(!window.matchMedia("(min-width: 1024px)").matches) toggleSidebar(); // 手機版列印完後關閉側欄
-        }, 300);
+        // 1. 扣除庫存
+        cart.forEach(c => {
+            const menuIdx = menu.findIndex(m => m.name === c.name);
+            if(menuIdx !== -1) menu[menuIdx].stock--;
+        });
+        localStorage.setItem('pos_menu_pro', JSON.stringify(menu));
+
+        // 2. 加入 KDS 廚房單
+        kdsOrders.push({
+            queueNo, 
+            items: [...cart], 
+            time: now.toISOString(),
+            status: 'pending'
+        });
+        localStorage.setItem('pos_kds_pro', JSON.stringify(kdsOrders));
+
+        // 3. 紀錄銷貨
+        sales.push({ date: now.toISOString(), total: cart.reduce((s,i)=>s+i.price,0), queueNo, orderId });
+        localStorage.setItem('pos_sales_pro', JSON.stringify(sales));
+
+        // 4. 列印 (省略確認)
+        document.getElementById('printArea').innerHTML = `<div class="print-page"><h1>NO. ${queueNo}</h1><hr>${cart.map(i=>`<p>${i.name}</p>`).join('')}</div>`;
+        window.print();
+
+        // 5. 重置
+        cart = [];
+        renderCart();
+        renderOrderMenu();
+        updateQueueNo();
+        alert(`取單號 ${queueNo} 已送往廚房！`);
     }
 
-    function renderReport() {
-        const queryDate = document.getElementById('reportDate').value;
-        const filtered = sales.filter(s => s.date.split('T')[0] === queryDate).sort((a,b) => new Date(b.date) - new Date(a.date));
-        const totalRev = filtered.reduce((s, v) => s + v.total, 0);
-        document.getElementById('totalRevenue').innerText = totalRev.toLocaleString();
-        document.getElementById('totalOrders').innerText = filtered.length;
-        document.getElementById('avgOrder').innerText = filtered.length > 0 ? Math.round(totalRev / filtered.length).toLocaleString() : 0;
-        document.getElementById('reportTableBody').innerHTML = filtered.map(s => `<tr><td class="px-6 py-4 text-blue-600 font-bold whitespace-nowrap">${new Date(s.date).toLocaleTimeString('zh-TW', {hour12:false})}</td><td class="px-6 py-4 font-black text-slate-700">NO. ${s.queueNo}</td><td class="px-6 py-4 text-slate-400 text-xs">#${s.orderId}</td><td class="px-6 py-4 text-right font-black text-slate-800">$${s.total.toLocaleString()}</td><td class="px-6 py-4 text-center"><button onclick="deleteOrder('${s.orderId}')" class="text-red-400 hover:text-red-600 border border-red-200 px-3 py-1 rounded-lg transition">作廢</button></td></tr>`).join('') || '<tr><td colspan="5" class="p-20 text-center text-slate-300 font-bold">無紀錄</td></tr>';
+    // --- KDS 廚房顯示邏輯 ---
+    function renderKDS() {
+        const container = document.getElementById('kdsContainer');
+        container.innerHTML = kdsOrders.map((order, idx) => {
+            const waitTime = Math.floor((new Date() - new Date(order.time)) / 60000);
+            return `
+            <div class="kds-card w-64 bg-white rounded-xl shadow-xl overflow-hidden flex-shrink-0 flex flex-col border-2 ${waitTime > 10 ? 'border-red-500' : 'border-blue-500'}">
+                <div class="${waitTime > 10 ? 'bg-red-500' : 'bg-blue-600'} text-white p-3 flex justify-between items-center">
+                    <span class="text-2xl font-black">#${order.queueNo}</span>
+                    <span class="font-mono text-sm timer" data-start="${order.time}">00:00</span>
+                </div>
+                <div class="p-4 flex-1 space-y-2 text-slate-700 font-bold overflow-y-auto max-h-[400px]">
+                    ${order.items.map(i => `<div class="border-b pb-1">□ ${i.name}</div>`).join('')}
+                </div>
+                <button onclick="completeKDS(${idx})" class="w-full bg-emerald-500 text-white py-4 font-black hover:bg-emerald-600 transition">完成出餐</button>
+            </div>`;
+        }).join('');
     }
 
-    function deleteOrder(orderId) {
-        if(confirm(`確定要作廢單號 #${orderId} 嗎？`)) {
-            sales = sales.filter(s => s.orderId !== orderId);
-            localStorage.setItem('pos_sales', JSON.stringify(sales));
-            renderReport();
-            updateQueueNo();
-        }
+    function updateKDSTimers() {
+        document.querySelectorAll('.timer').forEach(el => {
+            const start = new Date(el.dataset.start);
+            const diff = Math.floor((new Date() - start) / 1000);
+            const m = Math.floor(diff / 60).toString().padStart(2, '0');
+            const s = (diff % 60).toString().padStart(2, '0');
+            el.innerText = `${m}:${s}`;
+        });
     }
 
-    function saveStoreSettings() {
-        settings = { storeName: document.getElementById('cfgStoreName').value, phone: document.getElementById('cfgPhone').value };
-        localStorage.setItem('pos_settings', JSON.stringify(settings));
-        init(); alert('儲存成功');
+    function completeKDS(idx) {
+        kdsOrders.splice(idx, 1);
+        localStorage.setItem('pos_kds_pro', JSON.stringify(kdsOrders));
+        renderKDS();
     }
 
+    // --- 報表與庫存管理 ---
     function renderAdmin() {
-        document.getElementById('menuListUI').innerHTML = menu.map((p, i) => `<div class="flex justify-between p-3 bg-white border rounded-xl mb-2 items-center font-bold text-sm"><span>${p.name} - $${p.price}</span><button onclick="removeProduct(${i})" class="text-red-500 px-2">刪除</button></div>`).join('');
+        document.getElementById('menuListUI').innerHTML = menu.map((p, i) => `
+            <div class="flex justify-between items-center bg-white p-3 border rounded-xl shadow-sm">
+                <span class="font-bold text-slate-700 w-1/3">${p.name}</span>
+                <span class="text-blue-600 font-bold w-1/4">$${p.price}</span>
+                <div class="flex items-center space-x-2">
+                    <span class="text-xs text-slate-400">庫存:</span>
+                    <input type="number" onchange="updateStock(${i}, this.value)" value="${p.stock}" class="w-16 border rounded text-center font-bold">
+                    <button onclick="menu.splice(${i},1);localStorage.setItem('pos_menu_pro',JSON.stringify(menu));renderAdmin()" class="text-red-400 text-xs px-2">刪除</button>
+                </div>
+            </div>`).join('');
+    }
+
+    function updateStock(i, val) {
+        menu[i].stock = parseInt(val);
+        localStorage.setItem('pos_menu_pro', JSON.stringify(menu));
+        renderOrderMenu();
     }
 
     function addProduct() {
         const name = document.getElementById('newProdName').value;
         const price = parseInt(document.getElementById('newProdPrice').value);
+        const stock = parseInt(document.getElementById('newProdStock').value) || 0;
         if(name && price) {
-            menu.push({name, price});
-            localStorage.setItem('pos_menu', JSON.stringify(menu));
+            menu.push({name, price, stock});
+            localStorage.setItem('pos_menu_pro', JSON.stringify(menu));
             renderAdmin(); renderOrderMenu();
-            document.getElementById('newProdName').value = ''; document.getElementById('newProdPrice').value = '';
+            document.getElementById('newProdName').value = '';
         }
     }
 
-    function removeProduct(i) {
-        if(confirm('確定刪除？')) { menu.splice(i, 1); localStorage.setItem('pos_menu', JSON.stringify(menu)); renderAdmin(); renderOrderMenu(); }
+    function updateQueueNo() {
+        const today = new Date().toISOString().split('T')[0];
+        const nextNo = (sales.filter(s => s.date.split('T')[0] === today).length + 1).toString().padStart(3, '0');
+        document.getElementById('nextQueueNo').innerText = nextNo;
     }
 
-    function exportToExcel() {
-        const ws = XLSX.utils.json_to_sheet(sales.map(s => ({ '日期': s.date.split('T')[0], '取單號': s.queueNo, '單號': s.orderId, '總額': s.total })));
-        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Sales");
-        XLSX.writeFile(wb, `${settings.storeName}_報表.xlsx`);
+    function toggleSidebar() { document.getElementById('sidebar').classList.toggle('translate-x-full'); }
+
+    function renderReport() {
+        const today = new Date().toISOString().split('T')[0];
+        const filtered = sales.filter(s => s.date.split('T')[0] === today);
+        document.getElementById('totalRevenue').innerText = filtered.reduce((s,v)=>s+v.total,0).toLocaleString();
+        document.getElementById('totalOrders').innerText = filtered.length;
+        document.getElementById('reportTableBody').innerHTML = filtered.map(s => `
+            <tr class="border-b text-sm">
+                <td class="p-3">${new Date(s.date).toLocaleTimeString()}</td>
+                <td class="p-3 font-bold">#${s.queueNo}</td>
+                <td class="p-3 text-right font-black">$${s.total}</td>
+            </tr>`).join('');
     }
 
-    setInterval(() => { document.getElementById('digitalClock').innerText = new Date().toLocaleTimeString(); }, 1000);
     init();
 </script>
 </body>
