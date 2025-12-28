@@ -1,332 +1,235 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
-<meta charset="UTF-8" />
-<title>線上代碼測試</title>
-<meta name="keywords" content="測試代碼,Html測試,Javascript測試,Iframe測試,CSS測試,Script測試" />
-<meta name="description" content="HTML﹑Javascript﹑Iframe﹑CSS﹑Script﹑代碼測試工具" />
-<script type="a6c54dd0d53baaa0821e026b-text/javascript" src="/1-theme/swfjs/showhide.js"></script>
-<script type="a6c54dd0d53baaa0821e026b-text/javascript" src="/1-theme/swfjs/disnone.js"></script>
-<link rel="stylesheet" type="text/css" href="/1-theme/ifreesite/style.css" />
-<link rel="stylesheet" type="text/css" href="/1-theme/ifreesite/style-mini.css" />
-<meta name="author" content="Jack! and I.T Team" />
-<meta name="copyright" content="Online Tools." />
-<meta name="viewport" content="width=device-width" />
-<meta property="fb:app_id" content="174908615894115" />
-<meta property="fb:admins" content="1801384463" />
-<meta property="og:image" content="https://www.ifreesite.com/tool.png" />
-<!-- Popup Begin -->
-<link type="text/css" rel="stylesheet" href="/1-theme/popup/highslide.css" />
-<script type="a6c54dd0d53baaa0821e026b-text/javascript" src="/1-theme/popup/highslide-full.js"></script>
-<!-- Popup Flash Use Begin -->
-<script type="a6c54dd0d53baaa0821e026b-text/javascript" src="//ajax.googleapis.com/ajax/libs/swfobject/2.1/swfobject.js"></script>
-<!-- Popup Flash Use End -->
-<script type="a6c54dd0d53baaa0821e026b-text/javascript">
-    hs.graphicsDir = '/1-theme/popup/graphics/';
-    hs.outlineType = 'beveled';
-    hs.showCredits = false;
-	hs.headingEval = 'this.a.title';
-	hs.loadingText = '讀取中...';
-	hs.loadingTitle = '按此取消';
-	hs.resizeTitle = '調整大小';
-	// Add black close button
-	hs.registerOverlay({
-	slideshowGroup: 'group1',
-	html: '<div class="closebutton-black" onclick="return hs.close(this)" title="隱藏/關閉"></div>',
-	position: 'top right',
-	fade: 2, 
-	useOnHtml: true
-	});
-</script>
-<style type="text/css">
-/* CSS for removing the Move and Close text */
-.highslide-header .highslide-move, .highslide-header .highslide-close {
-	display: none;
-}
-/* CSS for the close buttons */
-.closebutton-black {
-	position: relative;
-	top: -15px;
-	left: 15px;
-	width: 30px;
-	height: 30px;
-	cursor: pointer;
-	background: url(/1-theme/popup/graphics/close.png);
-	/* NOTE! For IE6, you also need to update the highslide-ie6.css file. */
-}
-</style>
-<!-- Popup End -->
-<!-- Copy Begin -->
-<!-- <script type="module" src="/1-theme/zcopy/index.js"></script> -->
-<script type="a6c54dd0d53baaa0821e026b-module" src="https://unpkg.com/@github/clipboard-copy-element@latest"></script>
-<script type="a6c54dd0d53baaa0821e026b-text/javascript">
-  document.addEventListener('clipboard-copy', function (event) {
-   const clipboardne = event.target.querySelector('.clipboardne')
-    announcetws.setAttribute('aria-label', 'Copied');
-     clipboardne.hidden = false
-      setTimeout(function () {
-       announcetws.setAttribute('aria-label', '');
-        clipboardne.hidden = true
-         }, 1000)
-          })
-</script>
-<div aria-live="polite" id="announcetws"><!-- Copy Notice --></div>
-<!-- Copy End -->
-<!-- Sound Button Begin -->
-<script type="a6c54dd0d53baaa0821e026b-text/javascript">
-	function soundxyv(ydanp) { //Voice1
-	var yp= ydanp.split(" ");
-	var audio = document.createElement('audio');
-audio.src = "https://01.ifreesite.com/"+yp[0]+".mp3";
-  audio.play();
-	var count=0;
-audio.addEventListener("ended", function() {
-    count ++;
-    audio.src = "https://01.ifreesite.com/"+yp[count]+".mp3";//"sat1.mp3";
-   if(count>yp.length-1) {count=0;}
-    else {audio.play(); }
-   },false);
-   }
-//-------------------------
-    function soundxzv(ydanp) { //Voice2
-	var yp= ydanp.split(" ");
-//	alert("ydanp="+ydanp);
-	var audio = document.createElement('audio');
-audio.src = "https://www.ifreesite.com/"+yp[0]+".mp3";
-  audio.play();
-	var count=0;
-audio.addEventListener("ended", function() {
-    count ++;
-    audio.src = "https://www.ifreesite.com/"+yp[count]+".mp3";//"sat1.mp3";
-   if(count>yp.length-1) {count=0;}
-    else {audio.play(); }
-   },false);
-}
-//------------------------
-
-//---------------------
-	var appendixPopup = null;
-	 function MM_openBrWindow(theURL,winName,features) {
-   if (appendixPopup && !appendixPopup.closed) {
-	 appendixPopup.close();
- 	}
-	 appendixPopup = window.open(theURL,winName,features);
-	}
-</script>
-<!-- Sound Button End -->
-<!-- Google Analytic Begin -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-DEDGV3L0VY" type="a6c54dd0d53baaa0821e026b-text/javascript"></script>
-<script type="a6c54dd0d53baaa0821e026b-text/javascript">
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-DEDGV3L0VY');
-</script>
-<!-- Google Analytic End -->
-<!-- Page-level Ads Begin -->
-<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" type="a6c54dd0d53baaa0821e026b-text/javascript"></script>
-<script type="a6c54dd0d53baaa0821e026b-text/javascript">
-  (adsbygoogle = window.adsbygoogle || []).push({
-    google_ad_client: "ca-pub-4355432878324120",
-    enable_page_level_ads: true
-  });
-</script>
-<!-- Page-level Ads End -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="pageTitle">烤魚大師 POS 系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .tab-content { display: none; }
+        .tab-content.active { display: flex; }
+        #printArea { display: none; }
+        
+        @media print {
+            body * { visibility: hidden !important; }
+            #printArea { 
+                display: block !important; 
+                visibility: visible !important; 
+                position: absolute; left: 0; top: 0; width: 57mm; 
+            }
+            #printArea * { visibility: visible !important; }
+            .print-page { page-break-after: always; width: 57mm; padding: 2mm; color: black; font-family: monospace; }
+            @page { margin: 0; }
+        }
+    </style>
 </head>
-<body>
-<div id="if_container">
-  <header id="if_mainboxa" role="banner">
-    <div class="if_menu">
-      <ul>
-        <li class="if_menua">
-          <label class="if_menulabela"><img src="/1-theme/ifreesite/image/ia.png" />
-          </label>
-          <span><a href="/" title="線上工具｜網路資源" rel="home">主頁</a></span>
-        </li><li class="if_menub">
-          <label class="if_menulabelb"><img src="/1-theme/ifreesite/image/ib.png" />
-          </label>
-          <span><a href="//www.fmyeah.com" title="廣播電台線上收聽 | 電視直播在線收看" target="_blank">視聽樂</a></span>
-        </li><li class="if_menuc">
-          <label class="if_menulabelc"><img src="/1-theme/ifreesite/image/ic.png" />
-          </label>
-          <span><a href="//www.moonlol.com" title="月光部落 | 月亮下的碎碎唸唸" target="_blank">月光部落</a></span>
-        </li>
-      </ul>
-    </div>
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" type="a6c54dd0d53baaa0821e026b-text/javascript"></script>
-<ins class="adsbygoogle"
-     style="display:block"
-     data-ad-client="ca-pub-4355432878324120"
-     data-ad-slot="2021560894"
-     data-ad-format="auto"
-     data-full-width-responsive="true"></ins>
-<script type="a6c54dd0d53baaa0821e026b-text/javascript">
-     (adsbygoogle = window.adsbygoogle || []).push({});
-</script>
-<script type="a6c54dd0d53baaa0821e026b-text/javascript"><!--
-//儲存代碼
-function saveCode(obj) {
- if(document.all){
- var winname = window.open('','_blank','top=10000');
- var code=obj.value;
- winname.opener = null;
- winname.document.write(code);
- winname.document.execCommand('saveas','','code.htm');
- winname.close();
- }
-}
- 
-function goto1(ln){
- if(!/^\d+$/.test(ln)) return;
- var obj = document.getElementById("tt");
- var rng = obj.createTextRange();
- var arr = obj.value.replace(/\r/,"").split(/\n/);
- if(ln>arr.length) ln = arr.length;
- var str_tmp = "";
- for(var i=0;i<ln-1;i++) {
-  str_tmp += arr[i];
- }
- rng.moveStart('character',str_tmp.length+1);
- str_tmp = "";
- for(i=ln;i<arr.length;i++) {
-  str_tmp += arr[i];
- }
- rng.moveEnd('character',-str_tmp.length);
- rng.select();
-}
- 
-var isDebug=0;
-function runCode(obj){
-var code=obj.value;
-newwin=window.open('','','');
-if(isDebug){
-newwin.document.writeln("<script>");
-newwin.document.writeln("function reportError(msg,url,line){\nline-=14;\nvar str='出錯了: \\n\\n';\nstr+='錯誤: '+msg+' 行: '+(line);\nalert(str);\nopener.goto1(line);\nopener.focus();\nwindow.onerror=null;\nsetTimeout('self.close()',10);\nreturn true;\n}");
-newwin.document.writeln("window.onerror = reportError;");
-newwin.document.writeln("<\/script>");
-}
-//newwin.opener = null 
-newwin.document.write(code);
-newwin.document.close();
-}
-document.onkeydown=function(e){
-var e=e||window.event;
-if(e.ctrlKey == true && e.keyCode == 71){
-goto1(prompt('請輸入要轉到的行：','10'));
-return false;
-}
-}
-//-->
-</script>
-    <nav class="navmenu" role="navigation">
-      <ul>
-        <li class="nava">
-		<a href="/css-formatting.htm" title="CSS格式化">CSS 格式化</a>
-		</li>
-        <li class="navb">
-		<a href="/js-html-formatting" title="Html&JS格式化">Html&JS格式化</a>
-		</li>
-        <li class="navc">
-		<a href="/htmlcodecov" title="Html代碼轉換器">Html 代碼轉換器</a>
-		</li>
-		<li class="navf">
-		<a href="/unicode" title="UTF8轉換Unicode">UTF-8編碼轉換</a>
-		</li>
-		<li class="nave">
-		<a href="/html-entities.htm" title="HTML特殊字元">HTML特殊字符</a>
-		</li>
-      </ul>
-	 </nav>
-  </header>
-  <section id="if_mainboxb" role="main">
-    <div class="if_synopsib">
-      <div class="if_synopsis">
-	  線上代碼測試
-	  </div>
-      <p class="tbi">代碼測試工具支持 Html﹑Javascript﹑Iframe﹑CSS﹑Script 等程式語言。</p>
-    </div>
-<!-- ads
-<br /> -->
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" type="a6c54dd0d53baaa0821e026b-text/javascript"></script>
-<ins class="adsbygoogle if_adslot"
-     style="display:inline-block"
-     data-ad-client="ca-pub-4355432878324120"
-     data-ad-slot="7082315882"
-     data-ad-format="auto"
-     data-full-width-responsive="false"></ins>
-<script type="a6c54dd0d53baaa0821e026b-text/javascript">
-     (adsbygoogle = window.adsbygoogle || []).push({});
-</script>
-<br />
-<div class="toolbo">
-    <div class="tooltexp">
-        <div class="boxbox">
-            <form>
-                <textarea name="tt" id="tt">
-&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"&gt;
-&lt;html xmlns="http://www.w3.org/1999/xhtml" lang="zh-TW"&gt;
-&lt;head&gt;
-&lt;meta http-equiv="Content-Type" content="text/html;charset=utf-8" /&gt;
-&lt;title&gt;代碼預覽&lt;/title&gt;
-&lt;script type="text/javascript"&gt;
-&lt;/script&gt;
-&lt;style type="text/css"&gt;
-&lt;/style&gt;
-&lt;/head&gt;
-&lt;body&gt;
+<body class="bg-slate-100 h-screen overflow-hidden flex flex-col font-sans">
 
-&lt;/body&gt;
-&lt;/html&gt;
-</textarea>
-<input type="button" id="runButton" value="執行代碼" accesskey="R" onClick="if (!window.__cfRLUnblockHandlers) return false; runCode(document.getElementById('tt'))" class="tops" data-cf-modified-a6c54dd0d53baaa0821e026b-="" />
-            </form>
+<header class="bg-slate-900 text-white h-16 flex items-center justify-between px-6 no-print flex-shrink-0 shadow-lg z-50">
+    <div class="flex items-center space-x-6">
+        <span id="displayStoreName" class="text-xl font-black bg-blue-600 px-3 py-1 rounded tracking-tighter">POS MASTER</span>
+        <nav class="flex space-x-1 text-sm font-bold">
+            <button onclick="showTab('orderTab')" class="px-4 py-2 rounded-md hover:bg-slate-800 transition">點餐收銀</button>
+            <button onclick="showTab('reportTab')" class="px-4 py-2 rounded-md hover:bg-slate-800 transition text-slate-400" id="navReport">帳務統計</button>
+            <button onclick="showTab('adminTab')" class="px-4 py-2 rounded-md hover:bg-slate-800 transition text-slate-400" id="navAdmin">系統設定</button>
+        </nav>
+    </div>
+    <div class="flex items-center space-x-4">
+        <span class="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-1 rounded border border-emerald-500/30 font-bold">DINE-IN ONLY</span>
+        <div id="digitalClock" class="font-mono text-slate-400">00:00:00</div>
+    </div>
+</header>
+
+<main class="flex-1 flex overflow-hidden">
+    <div id="orderTab" class="tab-content active flex-1 w-full h-full">
+        <div class="flex-1 p-6 overflow-y-auto">
+            <div id="menuDisplay" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+        </div>
+        <div class="w-96 bg-white border-l shadow-2xl flex flex-col no-print">
+            <div class="p-6 bg-slate-50 border-b flex justify-between items-center text-slate-700">
+                <div class="flex flex-col">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Next Order</span>
+                    <span class="text-2xl font-black text-blue-600">NO. <span id="nextQueueNo">001</span></span>
+                </div>
+                <button onclick="clearCart()" class="text-slate-400 hover:text-red-500 text-sm font-bold border px-3 py-1 rounded-lg transition">清空</button>
+            </div>
+            <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
+            <div class="p-6 pb-12 bg-slate-50 space-y-4 border-t">
+                <div class="flex justify-between items-center text-3xl font-black">
+                    <span class="text-slate-800 text-lg">總額</span>
+                    <span class="text-blue-600">$<span id="totalPrice">0</span></span>
+                </div>
+                <button onclick="oneClickPrint()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 rounded-2xl font-black text-xl shadow-xl transition active:scale-95">
+                    確認結帳並出單
+                </button>
+            </div>
         </div>
     </div>
-</div>
-  </section>
-  <section id="if_mainboxc" role="complementary">
-   <div class="if_foads">
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" type="a6c54dd0d53baaa0821e026b-text/javascript"></script>
-<ins class="adsbygoogle"
-     style="display:block"
-     data-ad-format="autorelaxed"
-     data-ad-client="ca-pub-4355432878324120"
-     data-ad-slot="3184445236"></ins>
-<script type="a6c54dd0d53baaa0821e026b-text/javascript">
-     (adsbygoogle = window.adsbygoogle || []).push({});
+
+    <div id="reportTab" class="tab-content flex-1 p-8 bg-slate-100 overflow-y-auto hidden flex-col text-slate-800">
+        <div class="max-w-5xl mx-auto w-full">
+            <div class="flex justify-between items-center mb-6 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                <input type="date" id="reportDate" onchange="renderReport()" class="border p-2 rounded-xl font-bold">
+                <button onclick="exportToExcel()" class="bg-emerald-600 text-white px-8 py-2 rounded-xl font-bold">匯出 Excel</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 text-center">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border"><p class="text-slate-400 font-bold text-xs uppercase">總營收</p><p class="text-3xl font-black text-blue-600">$<span id="totalRevenue">0</span></p></div>
+                <div class="bg-white p-6 rounded-3xl shadow-sm border"><p class="text-slate-400 font-bold text-xs uppercase">成交單數</p><p class="text-3xl font-black text-slate-800" id="totalOrders">0</p></div>
+                <div class="bg-white p-6 rounded-3xl shadow-sm border"><p class="text-slate-400 font-bold text-xs uppercase">客單價</p><p class="text-3xl font-black text-slate-800">$<span id="avgOrder">0</span></p></div>
+            </div>
+            <div class="bg-white rounded-3xl shadow-sm border overflow-hidden">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-50 border-b text-slate-400 text-xs font-bold uppercase">
+                        <tr><th class="px-6 py-4">時間</th><th class="px-6 py-4">取單編號</th><th class="px-6 py-4">單號</th><th class="px-6 py-4 text-right">金額</th><th class="px-6 py-4 text-center">操作</th></tr>
+                    </thead>
+                    <tbody id="reportTableBody" class="divide-y divide-slate-100 text-sm font-medium"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="adminTab" class="tab-content flex-1 p-8 bg-white overflow-y-auto hidden flex-col">
+        <div class="max-w-xl mx-auto w-full space-y-10">
+            <section>
+                <h2 class="text-2xl font-black mb-6 border-l-8 border-blue-600 pl-4">品牌設定</h2>
+                <div class="bg-slate-50 p-6 rounded-2xl border space-y-4 text-slate-800">
+                    <input type="text" id="cfgStoreName" placeholder="自定義店名" class="w-full p-4 border rounded-xl font-bold">
+                    <input type="text" id="cfgPhone" placeholder="收據顯示電話" class="w-full p-4 border rounded-xl font-bold">
+                    <button onclick="saveStoreSettings()" class="w-full bg-slate-800 text-white py-3 rounded-xl font-bold">儲存品牌資訊</button>
+                </div>
+            </section>
+            <section>
+                <h2 class="text-2xl font-black mb-6 border-l-8 border-green-600 pl-4">菜單管理</h2>
+                <div class="flex gap-2 mb-4 text-slate-800">
+                    <input type="text" id="newProdName" placeholder="產品名稱" class="flex-1 p-4 border rounded-xl">
+                    <input type="number" id="newProdPrice" placeholder="價格" class="w-24 p-4 border rounded-xl">
+                    <button onclick="addProduct()" class="bg-green-600 text-white px-6 rounded-xl font-bold">新增</button>
+                </div>
+                <div id="menuListUI" class="space-y-2 text-slate-800"></div>
+            </section>
+        </div>
+    </div>
+</main>
+
+<div id="printArea"></div>
+
+<script>
+    let settings = JSON.parse(localStorage.getItem('pos_settings')) || { storeName: '烤魚大師', phone: '02-12345678' };
+    let menu = JSON.parse(localStorage.getItem('pos_menu')) || [{ name: '招牌烤魚', price: 880 }];
+    let sales = JSON.parse(localStorage.getItem('pos_sales')) || [];
+    let cart = [];
+
+    function init() {
+        document.getElementById('displayStoreName').innerText = settings.storeName;
+        document.getElementById('pageTitle').innerText = settings.storeName + " POS";
+        document.getElementById('cfgStoreName').value = settings.storeName;
+        document.getElementById('cfgPhone').value = settings.phone;
+        document.getElementById('reportDate').valueAsDate = new Date();
+        updateQueueNo();
+        renderOrderMenu();
+        renderCart();
+    }
+
+    function showTab(id) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        ['navReport', 'navAdmin'].forEach(navId => document.getElementById(navId).classList.add('text-slate-400'));
+        if(id === 'reportTab') { renderReport(); document.getElementById('navReport').classList.remove('text-slate-400'); }
+        if(id === 'adminTab') { renderAdmin(); document.getElementById('navAdmin').classList.remove('text-slate-400'); }
+    }
+
+    // 更新取單編號 (根據當日銷貨單數量)
+    function updateQueueNo() {
+        const today = new Date().toISOString().split('T')[0];
+        const todaySales = sales.filter(s => s.date.split('T')[0] === today);
+        const nextNo = (todaySales.length + 1).toString().padStart(3, '0');
+        document.getElementById('nextQueueNo').innerText = nextNo;
+    }
+
+    function renderOrderMenu() {
+        document.getElementById('menuDisplay').innerHTML = menu.map(p => `<div onclick="addToCart('${p.name}', ${p.price})" class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 cursor-pointer hover:border-blue-500 transition h-32 flex flex-col justify-between"><span class="font-bold text-slate-800 text-lg">${p.name}</span><span class="text-blue-600 font-black text-xl">$${p.price}</span></div>`).join('');
+    }
+
+    function addToCart(name, price) { cart.push({name, price}); renderCart(); }
+    function renderCart() {
+        const container = document.getElementById('cartItems');
+        if(cart.length === 0) { container.innerHTML = `<div class="text-center py-20 text-slate-300">請選取餐點</div>`; document.getElementById('totalPrice').innerText = '0'; return; }
+        container.innerHTML = cart.map((item, idx) => `<div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100 text-sm text-slate-800"><span class="font-bold">${item.name}</span><div class="flex items-center space-x-3"><span class="font-bold text-slate-500">$${item.price}</span><button onclick="removeFromCart(${idx})" class="w-6 h-6 bg-white text-red-500 rounded-full shadow-sm font-bold">✕</button></div></div>`).join('');
+        document.getElementById('totalPrice').innerText = cart.reduce((s, i) => s + i.price, 0).toLocaleString();
+    }
+
+    function removeFromCart(i) { cart.splice(i,1); renderCart(); }
+    function clearCart() { cart = []; renderCart(); }
+
+    function oneClickPrint() {
+        if(cart.length === 0) return alert('尚未點餐');
+        const total = cart.reduce((s, i) => s + i.price, 0);
+        const orderId = Date.now().toString().slice(-6);
+        const queueNo = document.getElementById('nextQueueNo').innerText;
+        const now = new Date();
+
+        const kitchenHTML = `<div class="print-page"><h1 style="text-align:center; font-size:24px; border:2px solid #000; margin-bottom:5px;">取單號：${queueNo}</h1><p style="text-align:center; font-size:14px; font-weight:bold; margin-top:0;">( 廚房出餐單 )</p><ul style="font-size:18px; list-style:none; padding:0; margin-top:10px;">${cart.map(i => `<li style="border-bottom:1px solid #eee; padding:5px 0;">□ ${i.name}</li>`).join('')}</ul><p style="font-size:10px; margin-top:15px;">時間: ${now.toLocaleString()}</p></div>`;
+        const receiptHTML = `<div class="print-page" style="border-top:1px dashed #000; padding-top:10px;"><h2 style="text-align:center; margin:0;">${settings.storeName}</h2><p style="text-align:center; font-size:10px;">${settings.phone}</p><div style="font-size:13px; font-weight:bold; text-align:center; background:#eee; padding:5px; margin:5px 0;">取單編號：${queueNo}</div><div style="font-size:11px; margin:5px 0;">交易單號: ${orderId}<br>交易時間: ${now.toLocaleString()}</div><table style="width:100%; font-size:13px; border-bottom:1px solid #000;">${cart.map(i => `<tr><td>${i.name}</td><td style="text-align:right">$${i.price}</td></tr>`).join('')}</table><h2 style="text-align:right; margin:10px 0;">總計: $${total}</h2><p style="text-align:center; font-size:10px;">請憑取單編號至櫃檯取餐</p></div>`;
+
+        document.getElementById('printArea').innerHTML = kitchenHTML + receiptHTML;
+        sales.push({ date: now.toISOString(), total, queueNo: queueNo, orderId, items: [...cart] });
+        localStorage.setItem('pos_sales', JSON.stringify(sales));
+        
+        setTimeout(() => { 
+            window.print(); 
+            cart = []; 
+            renderCart();
+            updateQueueNo(); // 出單完自動更新下一位號碼
+        }, 300);
+    }
+
+    function renderReport() {
+        const queryDate = document.getElementById('reportDate').value;
+        const filtered = sales.filter(s => s.date.split('T')[0] === queryDate).sort((a,b) => new Date(b.date) - new Date(a.date));
+        const totalRev = filtered.reduce((s, v) => s + v.total, 0);
+        document.getElementById('totalRevenue').innerText = totalRev.toLocaleString();
+        document.getElementById('totalOrders').innerText = filtered.length;
+        document.getElementById('avgOrder').innerText = filtered.length > 0 ? Math.round(totalRev / filtered.length).toLocaleString() : 0;
+        document.getElementById('reportTableBody').innerHTML = filtered.map(s => `<tr><td class="px-6 py-4 text-blue-600 font-bold">${new Date(s.date).toLocaleTimeString('zh-TW', {hour12:false})}</td><td class="px-6 py-4 font-black text-slate-700">NO. ${s.queueNo}</td><td class="px-6 py-4 text-slate-400">#${s.orderId}</td><td class="px-6 py-4 text-right font-black text-slate-800">$${s.total.toLocaleString()}</td><td class="px-6 py-4 text-center"><button onclick="deleteOrder('${s.orderId}')" class="text-red-400 hover:text-red-600 border border-red-200 px-3 py-1 rounded-lg transition">作廢</button></td></tr>`).join('') || '<tr><td colspan="5" class="p-20 text-center text-slate-300">今日無交易紀錄</td></tr>';
+    }
+
+    function deleteOrder(orderId) {
+        if(confirm(`確定要作廢單號 #${orderId} 的訂單嗎？`)) {
+            sales = sales.filter(s => s.orderId !== orderId);
+            localStorage.setItem('pos_sales', JSON.stringify(sales));
+            renderReport();
+            updateQueueNo();
+        }
+    }
+
+    function saveStoreSettings() {
+        settings = { storeName: document.getElementById('cfgStoreName').value, phone: document.getElementById('cfgPhone').value };
+        localStorage.setItem('pos_settings', JSON.stringify(settings));
+        init(); alert('品牌設定已更新');
+    }
+
+    function renderAdmin() {
+        document.getElementById('menuListUI').innerHTML = menu.map((p, i) => `<div class="flex justify-between p-4 bg-white border rounded-xl mb-2 items-center font-bold"><span>${p.name} - $${p.price}</span><button onclick="removeProduct(${i})" class="text-red-500 font-bold px-2">刪除</button></div>`).join('');
+    }
+
+    function addProduct() {
+        const name = document.getElementById('newProdName').value;
+        const price = parseInt(document.getElementById('newProdPrice').value);
+        if(name && price) { menu.push({name, price}); localStorage.setItem('pos_menu', JSON.stringify(menu)); renderAdmin(); renderOrderMenu(); document.getElementById('newProdName').value = ''; document.getElementById('newProdPrice').value = ''; }
+    }
+
+    function removeProduct(i) { if(confirm('確定刪除餐點？')) { menu.splice(i, 1); localStorage.setItem('pos_menu', JSON.stringify(menu)); renderAdmin(); renderOrderMenu(); } }
+
+    function exportToExcel() {
+        const ws = XLSX.utils.json_to_sheet(sales.map(s => ({ '日期': s.date.split('T')[0], '取單號': s.queueNo, '單號': s.orderId, '總額': s.total })));
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Sales");
+        XLSX.writeFile(wb, `${settings.storeName}_財務報表.xlsx`);
+    }
+
+    setInterval(() => { document.getElementById('digitalClock').innerText = new Date().toLocaleTimeString(); }, 1000);
+    init();
 </script>
-   </div>
-   <!-- PO --><div class="hey">
-國徽（盾徽）代表著一個國家的主權，象徵著人民的傳統風格及民族精神。 <a href="//www.ifreesite.com/world/coat-of-arms.htm" target="_blank">點此看 »</a>
-</div>
-  </section>
-  <footer id="if_mainboxd" class="if_colophon" role="contentinfo">
-    <div class="if_footer_box">
-      <div id="if_flk" class="if_footery">
-        <a href="/" title="線上工具｜網路資源" rel="home">線上工具</a> <span class="if_pipe">|</span> <a href="/sitemap.htm" title="網站地圖">Sitemap</a> <span class="if_pipe">|</span> <a href="//www.addus.info" title="聯絡我們">聯絡我們</a> <span class="if_pipe">|</span> <a href="/emoji" title="Emoji(表情圖示)">繪文字</a> <span class="if_pipe">|</span> <a href="/x/c/wishing-tree" title="Wishing Tree"><font color="#F9F900">許</font><font color="#FFE153">願</font><font color="#A8FF24">樹</font></a>
-        <div class="if_xs0">
-		Copyright &copy;2025 Online Tools,All Rights Reserved. <span class="if_scrolltop" onClick="if (!window.__cfRLUnblockHandlers) return false; window.scrollTo(0,0);return false;" title="回頂部" style="cursor:pointer" data-cf-modified-a6c54dd0d53baaa0821e026b-=""><strong>TOP</strong></span>
-        </div>
-      </div>
-      <div id="if_frt">
-        <div class="a2a_kit a2a_kit_size_32 a2a_default_style">
-          <a class="a2a_button_google_gmail" title="@Gmail 郵件分享!"></a>
-          <a class="a2a_button_facebook" title="分享至 Facebook"></a>
-          <a class="a2a_button_twitter" title="Twitter! 推特"></a>
-          <a class="a2a_button_whatsapp" title="WhatsApp Send"></a>
-		  <a class="a2a_button_telegram" title="Telegram 分享"></a>
-          <a class="a2a_button_wechat" title="WeChat 微信"></a>
-          <a class="a2a_button_line" title="Line Messages"></a>
-          <a class="a2a_dd" href="//www.addtoany.com/share" title="更多! More..."></a>
-        </div>
-      </div>
-    </div>
-  </footer>
-</div>
-<!-- AddToAny Begin -->
-<script type="a6c54dd0d53baaa0821e026b-text/javascript" src="//static.addtoany.com/menu/page.js"></script>
-<!-- AddToAny End -->
-<script src="/cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="a6c54dd0d53baaa0821e026b-|49" defer></script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b520a263ea35f02',t:'MTc2NjkzNTIwNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
