@@ -3,11 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>南屯任烤魚 - iPad 穩定版</title>
+    <title>南屯任烤魚 - Firebase 雲端旗艦版</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
     <style>
-        /* --- [1. iPad 全方位修正 CSS] --- */
+        /* --- [1. iPad 全方位修正 CSS - 保留自 v15] --- */
         body { 
             font-family: -apple-system, system-ui, sans-serif; 
             touch-action: manipulation;
@@ -16,13 +21,10 @@
             background-color: #f8fafc;
         }
 
-        /* 側邊欄修正：確保按鈕與清單始終存在於 DOM 且正確定位 */
         #sidebar {
             position: fixed;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            width: 380px; /* iPad 建議寬度 */
+            top: 0; right: 0; bottom: 0;
+            width: 380px;
             background: white;
             z-index: 100;
             display: flex;
@@ -32,39 +34,24 @@
             box-shadow: -4px 0 15px rgba(0,0,0,0.05);
         }
 
-        /* 在 iPad 橫向或電腦螢幕，側欄應預設開啟 */
         @media (min-width: 1024px) {
-            #sidebar {
-                position: relative;
-                transform: translateX(0) !important;
-                visibility: visible !important;
-            }
-            #main-container { margin-right: 0; } /* 佈局適配 */
+            #sidebar { position: relative; transform: translateX(0) !important; visibility: visible !important; }
         }
 
-        /* 在 iPad 縱向或手機，側欄預設收起 */
         @media (max-width: 1023px) {
-            #sidebar {
-                transform: translateX(100%);
-                z-index: 200;
-            }
-            #sidebar.sidebar-active {
-                transform: translateX(0);
-                visibility: visible !important;
-            }
+            #sidebar { transform: translateX(100%); z-index: 200; }
+            #sidebar.sidebar-active { transform: translateX(0); visibility: visible !important; }
         }
 
         .tab-content { display: none; height: calc(100vh - 64px); width: 100%; }
         .tab-content.active { display: flex; }
-
-        /* 修正點擊反饋 */
         .btn-active:active { transform: scale(0.96); opacity: 0.8; }
         
-        /* 列印區域 */
         @media print {
             body * { visibility: hidden !important; }
             #printArea, #printArea * { visibility: visible !important; }
             #printArea { position: absolute; left: 0; top: 0; width: 57mm; }
+            .print-page { page-break-after: always; width: 57mm; padding: 2mm; color: black; font-family: monospace; }
         }
     </style>
 </head>
@@ -84,11 +71,10 @@
 </header>
 
 <main class="flex-1 flex overflow-hidden">
-    
     <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-[150] hidden" onclick="sidebarToggle(false)"></div>
 
     <div id="orderTab" class="tab-content active w-full">
-        <div class="flex-1 p-6 overflow-y-auto custom-scrollbar">
+        <div class="flex-1 p-6 overflow-y-auto">
             <div id="menuDisplay" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4"></div>
             <div class="h-24"></div> 
         </div>
@@ -125,22 +111,16 @@
 
     <div id="reportTab" class="tab-content bg-slate-100 p-8 overflow-y-auto flex-col">
         <div class="max-w-5xl mx-auto w-full space-y-6">
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div class="bg-white p-6 rounded-3xl shadow-sm border text-center">
-                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">今日營收</p>
-                    <p class="text-3xl font-black text-blue-600">$<span id="totalRevenue">0</span></p>
-                </div>
-                <div class="bg-white p-6 rounded-3xl shadow-sm border text-center">
-                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">單數</p>
-                    <p class="text-3xl font-black text-slate-800" id="totalOrders">0</p>
-                </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 font-bold">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border text-center uppercase">今日營收<br><span id="totalRevenue" class="text-blue-600 text-3xl">$0</span></div>
+                <div class="bg-white p-6 rounded-3xl shadow-sm border text-center uppercase">單數<br><span id="totalOrders" class="text-3xl">0</span></div>
                 <button onclick="exportToExcel()" class="bg-emerald-600 text-white rounded-3xl font-black text-xl shadow-lg btn-active">匯出 Excel</button>
             </div>
             <div class="bg-white rounded-3xl shadow-sm border overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left">
                         <thead class="bg-slate-50 border-b text-slate-400 text-xs font-bold uppercase">
-                            <tr><th class="p-4">時間/單號</th><th class="p-4">取單號/明細</th><th class="p-4 text-right">金額</th><th class="p-4 text-center">操作</th></tr>
+                            <tr><th class="p-4">時間</th><th class="p-4">取單號/明細</th><th class="p-4 text-right">金額</th><th class="p-4 text-center">操作</th></tr>
                         </thead>
                         <tbody id="reportTableBody" class="divide-y text-sm font-medium"></tbody>
                     </table>
@@ -156,8 +136,8 @@
                 <div class="bg-slate-50 p-6 rounded-3xl space-y-3">
                     <input type="text" id="cfgStoreName" placeholder="店名" class="w-full p-4 rounded-2xl border font-bold">
                     <input type="text" id="cfgPhone" placeholder="電話" class="w-full p-4 rounded-2xl border font-bold">
-                    <input type="text" id="cfgNote" placeholder="收據底部訊息" class="w-full p-4 rounded-2xl border font-bold">
-                    <button onclick="saveSettings()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black btn-active">儲存設定</button>
+                    <input type="text" id="cfgNote" placeholder="底部訊息" class="w-full p-4 rounded-2xl border font-bold">
+                    <button onclick="saveSettings()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black btn-active">儲存雲端設定</button>
                 </div>
             </section>
             <section class="space-y-4">
@@ -165,8 +145,8 @@
                 <div class="bg-slate-50 p-6 rounded-3xl space-y-4">
                     <div class="flex gap-2">
                         <input type="text" id="newProdName" placeholder="品名" class="flex-1 p-3 border rounded-xl font-bold">
-                        <input type="number" id="newProdPrice" placeholder="價格" class="w-20 p-3 border rounded-xl font-bold text-center">
-                        <input type="number" id="newProdStock" placeholder="庫存" class="w-20 p-3 border rounded-xl font-bold text-center">
+                        <input type="number" id="newProdPrice" placeholder="價" class="w-20 p-3 border rounded-xl font-bold text-center">
+                        <input type="number" id="newProdStock" placeholder="存" class="w-20 p-3 border rounded-xl font-bold text-center">
                     </div>
                     <button onclick="addProduct()" class="w-full bg-blue-600 text-white py-3 rounded-2xl font-black btn-active">新增餐點</button>
                     <div id="menuListUI" class="space-y-2 mt-4"></div>
@@ -179,31 +159,70 @@
 <div id="printArea"></div>
 
 <script>
-    /* --- [7. iPad 修正版核心邏輯] --- */
-    let settings = JSON.parse(localStorage.getItem('pos_settings_v15')) || { storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
-    let menu = JSON.parse(localStorage.getItem('pos_menu_v15')) || [{ name: '招牌烤魚', price: 880, stock: 10 }];
-    let sales = JSON.parse(localStorage.getItem('pos_sales_v15')) || [];
-    let kdsOrders = JSON.parse(localStorage.getItem('pos_kds_v15')) || [];
+    // --- [Firebase 配置 - 請貼上您的資訊] ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyB4V2Zfzl_22tka2QHfkNSGaa23ke2TeWk",
+        authDomain: "flash-e1c46.firebaseapp.com",
+        projectId: "flash-e1c46",
+        storageBucket: "flash-e1c46.firebasestorage.app",
+        messagingSenderId: "927841326710",
+        appId: "1:927841326710:web:d832accdbf2a323ad1b157",
+        measurementId: "G-BVT622JRJT",
+        databaseURL: "https://flash-e1c46-default-rtdb.firebaseio.com/" 
+    };
+
+    // 初始化 Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // 數據模型
+    let settings = { storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
+    let menu = [];
+    let sales = [];
+    let kdsOrders = [];
     let cart = [];
 
     function init() {
-        document.getElementById('displayStoreName').innerText = settings.storeName;
-        document.getElementById('cfgStoreName').value = settings.storeName;
-        document.getElementById('cfgPhone').value = settings.phone;
-        document.getElementById('cfgNote').value = settings.note || '';
-        updateQueueDisplay();
-        renderMenu();
-        renderCartUI();
+        // 監聽品牌設定
+        db.ref('settings').on('value', snapshot => {
+            const data = snapshot.val();
+            if (data) {
+                settings = data;
+                document.getElementById('displayStoreName').innerText = settings.storeName;
+                document.getElementById('cfgStoreName').value = settings.storeName;
+                document.getElementById('cfgPhone').value = settings.phone;
+                document.getElementById('cfgNote').value = settings.note || '';
+            }
+        });
+
+        // 監聽菜單
+        db.ref('menu').on('value', snapshot => {
+            menu = snapshot.val() ? Object.values(snapshot.val()) : [];
+            renderMenu();
+            renderAdminUI();
+        });
+
+        // 監聽銷售報表
+        db.ref('sales').on('value', snapshot => {
+            sales = snapshot.val() ? Object.values(snapshot.val()) : [];
+            renderReportUI();
+            updateQueueDisplay();
+        });
+
+        // 監聽 KDS
+        db.ref('kds').on('value', snapshot => {
+            kdsOrders = snapshot.val() ? Object.values(snapshot.val()) : [];
+            renderKDSUI();
+        });
+
         setInterval(() => { document.getElementById('digitalClock').innerText = new Date().toLocaleTimeString(); }, 1000);
         setInterval(refreshKDSTimers, 1000);
+        renderCartUI();
     }
 
     function changeTab(id) {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        if(id === 'kdsTab') renderKDSUI();
-        if(id === 'reportTab') renderReportUI();
-        if(id === 'adminTab') renderAdminUI();
         sidebarToggle(false);
     }
 
@@ -220,10 +239,13 @@
     }
 
     function saveSettings() {
-        settings = { storeName: document.getElementById('cfgStoreName').value, phone: document.getElementById('cfgPhone').value, note: document.getElementById('cfgNote').value };
-        localStorage.setItem('pos_settings_v15', JSON.stringify(settings));
-        init();
-        alert('設定成功！');
+        const data = { 
+            storeName: document.getElementById('cfgStoreName').value, 
+            phone: document.getElementById('cfgPhone').value, 
+            note: document.getElementById('cfgNote').value 
+        };
+        db.ref('settings').set(data);
+        alert('雲端設定已同步！');
     }
 
     function renderMenu() {
@@ -231,7 +253,7 @@
             const isOut = p.stock <= 0;
             return `<div onclick="${isOut ? '' : `addToCart('${p.name}', ${p.price})`}" class="${isOut ? 'bg-slate-200 opacity-60' : 'bg-white active:bg-blue-50 cursor-pointer'} p-6 rounded-[2rem] border-2 border-transparent shadow-sm flex flex-col justify-between h-40 relative transition-all active:scale-95">
                 <span class="font-black text-slate-800 text-xl leading-tight">${p.name}</span>
-                <div class="flex justify-between items-end"><span class="text-blue-600 font-black text-2xl">$${p.price}</span><span class="text-xs font-bold text-slate-400">STOCK: ${p.stock}</span></div>
+                <div class="flex justify-between items-end"><span class="text-blue-600 font-black text-2xl">$${p.price}</span><span class="text-xs font-bold text-slate-400 uppercase">Stock: ${p.stock}</span></div>
                 ${isOut ? '<span class="absolute inset-0 flex items-center justify-center font-black text-red-500 rotate-12 text-2xl uppercase">Sold Out</span>' : ''}
             </div>`;
         }).join('');
@@ -243,7 +265,7 @@
         if (inCart >= item.stock) return alert('庫存不足');
         cart.push({name, price});
         renderCartUI();
-        if (window.innerWidth < 1024) sidebarToggle(true); // iPad 縱向點餐後自動顯示清單
+        if (window.innerWidth < 1024) sidebarToggle(true);
     }
 
     function renderCartUI() {
@@ -254,7 +276,7 @@
             document.getElementById('totalPrice').innerText = '0';
             return;
         }
-        container.innerHTML = cart.map((item, idx) => `<div class="flex justify-between items-center bg-slate-50 p-5 rounded-2xl border text-lg font-bold"><span>${item.name}</span><div class="flex items-center space-x-4"><span>$${item.price}</span><button onclick="cart.splice(${idx},1);renderCartUI()" class="w-10 h-10 bg-white text-red-500 rounded-full shadow-sm flex items-center justify-center text-xl">✕</button></div></div>`).join('');
+        container.innerHTML = cart.map((item, idx) => `<div class="flex justify-between items-center bg-slate-50 p-5 rounded-2xl border text-lg font-bold font-sans"><span>${item.name}</span><div class="flex items-center space-x-4"><span>$${item.price}</span><button onclick="cart.splice(${idx},1);renderCartUI()" class="w-10 h-10 bg-white text-red-500 rounded-full shadow-sm flex items-center justify-center text-xl">✕</button></div></div>`).join('');
         document.getElementById('totalPrice').innerText = cart.reduce((s, i) => s + i.price, 0).toLocaleString();
     }
 
@@ -265,27 +287,35 @@
         const orderId = Date.now().toString().slice(-6);
         const total = cart.reduce((s,i)=>s+i.price,0);
 
-        cart.forEach(c => { const m = menu.find(mi => mi.name === c.name); if(m) m.stock--; });
-        sales.push({ date: now.toISOString(), total, queueNo, orderId, items: [...cart] });
-        kdsOrders.push({ queueNo, items: [...cart], time: now.toISOString() });
-        
-        localStorage.setItem('pos_menu_v15', JSON.stringify(menu));
-        localStorage.setItem('pos_sales_v15', JSON.stringify(sales));
-        localStorage.setItem('pos_kds_v15', JSON.stringify(kdsOrders));
+        // 雲端更新庫存
+        cart.forEach(c => {
+            const m = menu.find(mi => mi.name === c.name);
+            if(m) {
+                m.stock--;
+                db.ref('menu').child(m.name).set(m);
+            }
+        });
+
+        const orderData = { date: now.toISOString(), total, queueNo, orderId, items: [...cart] };
+        db.ref('sales').push(orderData);
+        db.ref('kds').child(orderId).set({ queueNo, items: [...cart], time: now.toISOString(), orderId });
 
         document.getElementById('printArea').innerHTML = `<div class="print-page"><h2 style="text-align:center">${settings.storeName}</h2><h1 style="text-align:center; font-size:40px">#${queueNo}</h1><hr>${cart.map(i=>`<div style="display:flex; justify-content:space-between"><span>${i.name}</span><span>$${i.price}</span></div>`).join('')}<hr><h2 style="text-align:right">總計: $${total}</h2><p style="text-align:center; font-size:10px">${settings.phone}<br>${settings.note}</p></div>`;
         window.print();
         
-        cart = []; renderCartUI(); renderMenu(); updateQueueDisplay(); sidebarToggle(false);
+        cart = []; renderCartUI(); sidebarToggle(false);
     }
 
     function renderKDSUI() {
-        const container = document.getElementById('kdsContainer');
-        container.innerHTML = kdsOrders.map((order, idx) => `<div class="w-80 bg-white rounded-[2.5rem] shadow-2xl flex-shrink-0 flex flex-col border-4 border-blue-500 overflow-hidden h-fit">
+        document.getElementById('kdsContainer').innerHTML = kdsOrders.map((order) => `<div class="w-80 bg-white rounded-[2.5rem] shadow-2xl flex-shrink-0 flex flex-col border-4 border-blue-500 overflow-hidden h-fit">
             <div class="bg-blue-600 text-white p-5 flex justify-between items-center"><span class="text-4xl font-black">#${order.queueNo}</span><span class="font-mono text-xl timer" data-start="${order.time}">00:00</span></div>
             <div class="p-6 space-y-3 font-black text-2xl text-slate-700">${order.items.map(i => `<div class="border-b pb-2">□ ${i.name}</div>`).join('')}</div>
-            <button onclick="kdsOrders.splice(${idx},1);localStorage.setItem('pos_kds_v15',JSON.stringify(kdsOrders));renderKDSUI();" class="bg-emerald-500 text-white py-8 text-3xl font-black active:bg-emerald-700">完成</button>
+            <button onclick="finishKDS('${order.orderId}')" class="bg-emerald-500 text-white py-8 text-3xl font-black active:bg-emerald-700">完成</button>
         </div>`).join('');
+    }
+
+    function finishKDS(orderId) {
+        db.ref('kds').child(orderId).remove();
     }
 
     function refreshKDSTimers() {
@@ -302,28 +332,48 @@
         const filtered = sales.filter(s => s.date.split('T')[0] === today).sort((a,b) => new Date(b.date) - new Date(a.date));
         document.getElementById('totalRevenue').innerText = filtered.reduce((s,v)=>s+v.total,0).toLocaleString();
         document.getElementById('totalOrders').innerText = filtered.length;
-        document.getElementById('reportTableBody').innerHTML = filtered.map(s => `<tr><td class="p-6"><div class="text-blue-600 font-black text-xl">${new Date(s.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div><div class="text-xs text-slate-400">#${s.orderId}</div></td><td class="p-6"><div class="font-black text-2xl">NO. ${s.queueNo}</div><div class="text-xs text-slate-500 font-bold">${s.items.map(i=>i.name).join(', ')}</div></td><td class="p-6 text-right font-black text-2xl">$${s.total}</td><td class="p-6 text-center"><button onclick="voidOrder('${s.orderId}')" class="text-red-500 border-2 border-red-50 px-4 py-2 rounded-2xl font-black active:bg-red-50">作廢</button></td></tr>`).join('') || '<tr><td colspan="4" class="p-20 text-center text-slate-300 font-black">無成交紀錄</td></tr>';
+        document.getElementById('reportTableBody').innerHTML = filtered.map(s => `<tr><td class="p-6 text-blue-600 font-black text-xl">${new Date(s.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td><td class="p-6"><div class="font-black text-2xl">NO. ${s.queueNo}</div><div class="text-xs text-slate-500 font-bold">${s.items.map(i=>i.name).join(', ')}</div></td><td class="p-6 text-right font-black text-2xl">$${s.total}</td><td class="p-6 text-center"><button onclick="voidOrder('${s.orderId}')" class="text-red-500 border-2 border-red-50 px-4 py-2 rounded-2xl font-black active:bg-red-50">作廢</button></td></tr>`).join('') || '<tr><td colspan="4" class="p-20 text-center text-slate-300 font-black">無成交紀錄</td></tr>';
     }
 
-    function voidOrder(id) {
-        if(!confirm('確認作廢訂單？庫存將自動回補')) return;
-        const order = sales.find(s => s.orderId === id);
-        order.items.forEach(i => { const m = menu.find(mi => mi.name === i.name); if(m) m.stock++; });
-        sales = sales.filter(s => s.orderId !== id);
-        localStorage.setItem('pos_sales_v15', JSON.stringify(sales));
-        localStorage.setItem('pos_menu_v15', JSON.stringify(menu));
-        renderReportUI(); renderMenu();
+    function voidOrder(orderId) {
+        if(!confirm('確認作廢？庫存將回補')) return;
+        db.ref('sales').orderByChild('orderId').equalTo(orderId).once('value', snapshot => {
+            snapshot.forEach(child => {
+                const order = child.val();
+                order.items.forEach(i => {
+                    const m = menu.find(mi => mi.name === i.name);
+                    if(m) {
+                        m.stock++;
+                        db.ref('menu').child(m.name).set(m);
+                    }
+                });
+                child.ref.remove();
+            });
+        });
     }
 
     function renderAdminUI() {
-        document.getElementById('menuListUI').innerHTML = menu.map((p, i) => `<div class="flex justify-between items-center bg-white p-6 rounded-3xl border shadow-sm"><div class="flex flex-col"><span class="font-black text-slate-700 text-xl">${p.name}</span><span class="text-blue-600 font-black">$${p.price}</span></div><div class="flex items-center space-x-4"><input type="number" onchange="menu[${i}].stock=parseInt(this.value);localStorage.setItem('pos_menu_v15',JSON.stringify(menu));renderMenu();" value="${p.stock}" class="w-20 p-2 border-2 rounded-xl text-center font-black text-xl"><button onclick="if(confirm('刪除？')){menu.splice(${i},1);localStorage.setItem('pos_menu_v15',JSON.stringify(menu));renderAdminUI();renderMenu();}" class="text-red-500 font-black px-4">✕</button></div></div>`).join('');
+        document.getElementById('menuListUI').innerHTML = menu.map((p) => `<div class="flex justify-between items-center bg-white p-6 rounded-3xl border shadow-sm"><div class="flex flex-col"><span class="font-black text-slate-700 text-xl font-sans">${p.name}</span><span class="text-blue-600 font-black">$${p.price}</span></div><div class="flex items-center space-x-4"><input type="number" onchange="updateStock('${p.name}', this.value)" value="${p.stock}" class="w-20 p-2 border-2 rounded-xl text-center font-black text-xl"><button onclick="deleteProduct('${p.name}')" class="text-red-500 font-black px-4 text-2xl">✕</button></div></div>`).join('');
+    }
+
+    function updateStock(name, val) {
+        db.ref('menu').child(name).update({ stock: parseInt(val) });
+    }
+
+    function deleteProduct(name) {
+        if(confirm('確定刪除？')) db.ref('menu').child(name).remove();
     }
 
     function addProduct() {
         const name = document.getElementById('newProdName').value;
         const price = parseInt(document.getElementById('newProdPrice').value);
         const stock = parseInt(document.getElementById('newProdStock').value) || 0;
-        if(name && price) { menu.push({name, price, stock}); localStorage.setItem('pos_menu_v15', JSON.stringify(menu)); renderAdminUI(); renderMenu(); document.getElementById('newProdName').value=''; document.getElementById('newProdPrice').value=''; document.getElementById('newProdStock').value=''; }
+        if(name && price) {
+            db.ref('menu').child(name).set({name, price, stock});
+            document.getElementById('newProdName').value=''; 
+            document.getElementById('newProdPrice').value=''; 
+            document.getElementById('newProdStock').value='';
+        }
     }
 
     function updateQueueDisplay() {
