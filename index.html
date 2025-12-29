@@ -2,50 +2,248 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PRO POS - Cloud Print Agent</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>PRO POS - Universal + Cloud Print (Fixed)</title>
 
+  <!-- Polyfills：救老 PC / 舊 Safari（避免整頁 JS 直接死掉） -->
   <script src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/core-js-bundle@3.38.1/minified.js"></script>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; padding: 16px; background:#0b1220; color:#e5e7eb; }
-    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-    .card { background:#111827; border:1px solid #1f2937; padding:14px; border-radius:14px; }
-    .log { margin-top:12px; border:1px solid #1f2937; padding:12px; border-radius:12px; height: 60vh; overflow:auto; background:#0f172a; }
-    .badge { padding:4px 10px; border-radius:999px; color:#fff; font-size:12px; font-weight:900; }
-    .ok { background:#16a34a; } .warn { background:#f59e0b; } .err { background:#dc2626; }
-    button { padding:10px 14px; border-radius:10px; border:1px solid #334155; background:#0b1220; color:#e5e7eb; cursor:pointer; font-weight:900; }
-    button:disabled { opacity: .5; cursor: not-allowed; }
-    input { padding:10px 12px; border-radius:10px; border:1px solid #334155; background:#0b1220; color:#e5e7eb; font-weight:800; }
-    iframe { display:none; }
-    .hint { color:#94a3b8; font-size:12px; font-weight:700; }
+    body { font-family: -apple-system, system-ui, sans-serif; touch-action: manipulation; -webkit-overflow-scrolling: touch; overflow: hidden; background-color: #f8fafc; }
+    .tab-content { display: none; height: calc(100vh - 64px); width: 100%; }
+    .tab-content.active { display: flex; }
+
+    /* Sidebar：手機/平板滑出；PC 固定顯示 */
+    #sidebar {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: 380px;
+      background: white;
+      z-index: 220; /* ✅ 修正：永遠壓過 overlay，避免看起來像當機 */
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid #e2e8f0;
+      transition: transform 0.25s ease-in-out;
+      box-shadow: -4px 0 15px rgba(0,0,0,0.05);
+      flex-shrink: 0; /* ✅ 修正：PC flex 佈局不會把 sidebar 壓扁到按鈕消失 */
+    }
+
+    @media (min-width: 1024px) {
+      #sidebar {
+        position: relative;
+        width: 380px !important;
+        transform: translateX(0) !important;
+        visibility: visible !important;
+        flex-shrink: 0 !important;
+      }
+      #sidebarOverlay { display: none !important; } /* ✅ 修正：PC 永遠不要 overlay */
+    }
+
+    @media (max-width: 1023px) {
+      #sidebar { transform: translateX(100%); z-index: 220; }
+      #sidebar.sidebar-active { transform: translateX(0); visibility: visible !important; }
+    }
+
+    /* Overlay：只給手機/平板用 */
+    #sidebarOverlay { z-index: 150; }
+
+    /* Print CSS 保留（但 POS 不再直接 window.print，交給 Print Agent） */
+    @media print {
+      body * { visibility: hidden !important; }
+      #printArea, #printArea * { visibility: visible !important; color: black !important; }
+      #printArea { position: absolute; left: 0; top: 0; width: 52mm; margin: 0; padding: 0; }
+      .print-page { width: 100%; font-family: monospace; font-size: 12pt; line-height: 1.2; page-break-after: always; padding: 2mm; }
+      .print-page h1 { font-size: 24pt !important; font-weight: 900 !important; margin: 2mm 0; }
+      .print-page h2 { font-size: 16pt !important; font-weight: bold !important; }
+      hr { border: none; border-top: 1px dashed black !important; margin: 2mm 0; }
+    }
   </style>
 </head>
 
-<body>
-  <div class="card">
-    <h2 style="margin:0 0 8px 0;">雲端列印代理（Print Agent）</h2>
-    <div class="row">
-      <span class="badge warn" id="status">待命</span>
-      <label style="font-weight:800;">Store ID：</label>
-      <input id="storeId" value="default" />
-      <button id="startBtn">開始監聽</button>
-      <button id="stopBtn" disabled>停止</button>
-      <button id="testBtn">送出測試任務</button>
+<body class="h-screen flex flex-col">
+
+<header class="bg-slate-900 text-white h-16 flex items-center justify-between px-6 flex-shrink-0 z-[250] no-print">
+  <div class="flex items-center space-x-6">
+    <span id="displayStoreName" class="text-xl font-black bg-blue-600 px-3 py-1 rounded tracking-tighter">PRO POS</span>
+    <nav class="flex space-x-2 font-bold text-sm">
+      <button data-tab="orderTab" class="px-4 py-2 rounded-xl hover:bg-slate-800 transition">點餐</button>
+      <button data-tab="kdsTab" class="px-4 py-2 rounded-xl hover:bg-slate-800 text-orange-400">廚房</button>
+      <button data-tab="reportTab" class="px-4 py-2 rounded-xl hover:bg-slate-800 text-slate-400">報表</button>
+      <button data-tab="adminTab" class="px-4 py-2 rounded-xl hover:bg-slate-800 text-slate-400">設定</button>
+    </nav>
+  </div>
+  <div id="digitalClock" class="font-mono text-slate-400 tracking-widest hidden md:block">00:00:00</div>
+</header>
+
+<main class="flex-1 flex overflow-hidden relative">
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 hidden" onclick="sidebarToggle(false)"></div>
+
+  <!-- 點餐 -->
+  <div id="orderTab" class="tab-content active w-full">
+    <div class="flex-1 p-6 overflow-y-auto">
+      <div id="menuDisplay" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+      <div class="h-32"></div>
     </div>
-    <div class="hint" style="margin-top:8px;">
-      這頁請在「接了熱感印表機」的 PC 上開著。請先設定預設印表機與紙張（57/58mm）。
+
+    <!-- ✅ 修正：加 flex-shrink-0，PC 不會把它壓沒 -->
+    <div id="sidebar" class="flex-shrink-0">
+      <div class="p-6 bg-slate-50 border-b flex justify-between items-center">
+        <div class="flex flex-col">
+          <span class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Queue No.</span>
+          <span class="text-3xl font-black text-blue-600 italic">#<span id="nextQueueNo">001</span></span>
+        </div>
+        <button id="closeSidebarBtn" class="lg:hidden w-12 h-12 bg-white rounded-full shadow-sm border flex items-center justify-center font-bold text-slate-500 text-2xl">✕</button>
+      </div>
+
+      <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-3 bg-white"></div>
+
+      <div class="p-6 bg-slate-50 border-t space-y-4 pb-12">
+        <div class="flex justify-between items-center text-3xl font-black text-slate-800">
+          <span class="text-base text-slate-400 uppercase font-bold tracking-wider">Total</span>
+          <span>$<span id="totalPrice">0</span></span>
+        </div>
+
+        <!-- ✅ 修正：按鈕不會消失；結帳時會被 disable，但一定會解除 -->
+        <button id="checkoutBtn" class="w-full bg-blue-600 text-white py-6 rounded-2xl text-2xl font-black shadow-lg shadow-blue-200 active:bg-blue-800 transition-all">
+          確認結帳
+        </button>
+
+        <div class="text-xs text-slate-400 font-bold">
+          列印模式：<span class="text-emerald-600">雲端列印</span>（由 Print Agent 印出）
+        </div>
+      </div>
+    </div>
+
+    <button id="openSidebarBtn" class="lg:hidden fixed bottom-8 right-8 bg-blue-600 text-white w-20 h-20 rounded-full shadow-2xl flex items-center justify-center z-[120] active:scale-95 transition-transform">
+      <span class="text-3xl">🛒</span>
+      <span id="mobileCartCount" class="absolute -top-1 -right-1 bg-red-500 text-white text-sm w-8 h-8 rounded-full flex items-center justify-center border-4 border-white font-black">0</span>
+    </button>
+  </div>
+
+  <!-- 廚房 -->
+  <div id="kdsTab" class="tab-content bg-slate-800 p-6 overflow-x-auto">
+    <div id="kdsContainer" class="flex space-x-6 h-full items-start"></div>
+  </div>
+
+  <!-- 報表 -->
+  <div id="reportTab" class="tab-content bg-slate-100 p-8 overflow-y-auto flex-col">
+    <div class="max-w-5xl mx-auto w-full space-y-6">
+      <div class="grid grid-cols-3 gap-6 font-black text-center">
+        <div class="bg-white p-6 rounded-3xl border shadow-sm">
+          <p class="text-xs text-slate-400 uppercase">今日營收</p>
+          <p id="totalRevenue" class="text-blue-600 text-2xl">$0</p>
+        </div>
+        <div class="bg-white p-6 rounded-3xl border shadow-sm">
+          <p class="text-xs text-slate-400 uppercase">單數</p>
+          <p id="totalOrders" class="text-2xl text-slate-800">0</p>
+        </div>
+        <button id="exportExcelBtn" class="bg-emerald-600 text-white rounded-3xl text-xl shadow-lg active:bg-emerald-700">匯出 Excel</button>
+      </div>
+
+      <div class="bg-white rounded-3xl shadow-sm border overflow-hidden">
+        <table class="w-full text-left font-bold border-collapse">
+          <thead class="bg-slate-50 border-b text-slate-400 text-xs uppercase">
+            <tr class="divide-x">
+              <th class="p-4">時間</th>
+              <th class="p-4 text-center">取單號</th>
+              <th class="p-4 text-right">金額</th>
+              <th class="p-4 text-center">操作</th>
+            </tr>
+          </thead>
+          <tbody id="reportTableBody" class="divide-y text-sm"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
-  <div class="log" id="log"></div>
-  <iframe id="printFrame"></iframe>
+  <!-- 設定 -->
+  <div id="adminTab" class="tab-content bg-white p-8 overflow-y-auto flex-col">
+    <div class="max-w-xl mx-auto w-full space-y-10">
+
+      <section class="bg-slate-50 p-6 rounded-3xl border space-y-4">
+        <h2 class="text-2xl font-black text-blue-600 border-l-8 border-blue-600 pl-4">品牌與列印設定</h2>
+        <input type="text" id="cfgStoreId" placeholder="Store ID（例：nantun01）" class="w-full p-4 rounded-2xl border font-bold">
+        <input type="text" id="cfgStoreName" placeholder="自定義店名" class="w-full p-4 rounded-2xl border font-bold">
+        <input type="text" id="cfgPhone" placeholder="收據聯絡電話" class="w-full p-4 rounded-2xl border font-bold">
+        <input type="text" id="cfgNote" placeholder="收據底部訊息" class="w-full p-4 rounded-2xl border font-bold">
+        <button id="saveSettingsBtn" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black active:scale-95 transition">儲存雲端設定</button>
+        <div class="text-xs text-slate-400 font-bold">
+          Print Agent 要監聽同一個 Store ID 才會印。
+        </div>
+      </section>
+
+      <section class="bg-slate-50 p-6 rounded-3xl border space-y-4">
+        <h2 class="text-2xl font-black text-green-600 border-l-8 border-green-600 pl-4">餐點庫存管理</h2>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input type="text" id="newProdName" placeholder="餐點品名" class="flex-1 p-3 border rounded-xl font-bold">
+          <input type="number" id="newProdPrice" placeholder="價格" class="w-full sm:w-24 p-3 border rounded-xl font-bold text-center">
+          <input type="number" id="newProdStock" placeholder="庫存" class="w-full sm:w-24 p-3 border rounded-xl font-bold text-center">
+        </div>
+        <button id="addProductBtn" class="w-full bg-blue-600 text-white py-3 rounded-2xl font-black active:scale-95 transition">新增產品</button>
+        <div id="menuListUI" class="space-y-2 mt-4"></div>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<!-- 不直接 print，但保留 -->
+<div id="printArea"></div>
+
+<!-- ✅ 修正：Toast 提示（取代 alert，避免 iPad 假死） -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-2xl font-black shadow-2xl hidden z-[9999]"></div>
 
 <script>
+  /* -----------------------------
+     Utilities (ES5-safe)
+  ----------------------------- */
+  function padLeft(num, len) { var s = String(num); while (s.length < len) s = '0' + s; return s; }
+  function safeText(el, text) { el.textContent = String(text !== undefined && text !== null ? text : ''); }
+  function escapeHTML(str) {
+    str = String(str !== undefined && str !== null ? str : '');
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  }
+  function todayKeyISO() { return new Date().toISOString().split('T')[0]; }
+  function fmtMoney(n) { n = Number(n || 0); try { return n.toLocaleString(); } catch(e) { return String(n); } }
+
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    setTimeout(function(){ t.classList.add('hidden'); }, 1800);
+  }
+
+  function sidebarToggle(open) {
+    var sb = document.getElementById('sidebar');
+    var ov = document.getElementById('sidebarOverlay');
+    if (open) { sb.classList.add('sidebar-active'); ov.classList.remove('hidden'); }
+    else { sb.classList.remove('sidebar-active'); ov.classList.add('hidden'); }
+  }
+
+  function changeTab(id) {
+    var tabs = document.querySelectorAll('.tab-content');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+    document.getElementById(id).classList.add('active');
+    if (id === 'reportTab') renderReportUI();
+    sidebarToggle(false);
+  }
+
+  function snapToArrayWithKey(snap) {
+    var out = [];
+    snap.forEach(function(child){ var v = child.val() || {}; v.__key = child.key; out.push(v); });
+    return out;
+  }
+
+  /* -----------------------------
+     Firebase init
+  ----------------------------- */
   var firebaseConfig = {
     apiKey: "AIzaSyB4V2Zfzl_22tka2QHfkNSGaa23ke2TeWk",
     authDomain: "flash-e1c46.firebaseapp.com",
@@ -56,130 +254,580 @@
     measurementId: "G-BVT622JRJT",
     databaseURL: "https://flash-e1c46-default-rtdb.firebaseio.com/"
   };
-
   firebase.initializeApp(firebaseConfig);
   var db = firebase.database();
 
-  var listeningRef = null;
-  var isPrinting = false;
+  /* -----------------------------
+     State
+  ----------------------------- */
+  var settings = { storeId: 'default', storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
+  var menu = [];      // [{id,name,price,stock}]
+  var sales = [];     // [{... , __key}]
+  var kdsOrders = []; // [{... , __key}]
+  var cart = [];      // [{menuId,name,price}]
+  var busyCheckout = false;
 
-  function log(msg) {
-    var el = document.getElementById('log');
-    var line = document.createElement('div');
-    line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
-    el.appendChild(line);
-    el.scrollTop = el.scrollHeight;
+  /* -----------------------------
+     Cloud print queue
+  ----------------------------- */
+  function enqueuePrintJob(payload) {
+    payload = payload || {};
+    var storeId = (settings && settings.storeId) ? settings.storeId : 'default';
+    var ref = db.ref('printJobs/' + storeId).push();
+    return ref.set({
+      status: 'NEW',
+      createdAt: new Date().toISOString(),
+      type: payload.type || 'receipt',
+      html: payload.html || '',
+      meta: payload.meta || {}
+    }).then(function(){ return ref.key; });
   }
 
-  function setStatus(text, cls) {
-    var s = document.getElementById('status');
-    s.textContent = text;
-    s.className = 'badge ' + cls;
-  }
-
-  function printHTML(html) {
-    return new Promise(function(resolve, reject) {
-      try {
-        var iframe = document.getElementById('printFrame');
-        var doc = iframe.contentWindow.document;
-        doc.open();
-        doc.write(
-          '<!doctype html><html><head><meta charset="utf-8">' +
-          '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-          '<style>@media print{body{margin:0;padding:0;} .print-page{width:52mm;font-family:monospace;font-size:12pt;line-height:1.2;padding:2mm;} h1{font-size:24pt;margin:2mm 0;font-weight:900;} h2{font-size:16pt;margin:0;font-weight:bold;} hr{border:none;border-top:1px dashed #000;margin:2mm 0;}}</style>' +
-          '</head><body>' + (html || '') + '</body></html>'
-        );
-        doc.close();
-
-        setTimeout(function() {
-          try {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            resolve(true);
-          } catch (e2) { reject(e2); }
-        }, 150);
-      } catch (e) { reject(e); }
-    });
-  }
-
-  function processJob(jobKey, jobVal, storeId) {
-    if (isPrinting) return;
-    if (!jobVal || jobVal.status !== 'NEW') return;
-
-    isPrinting = true;
-    setStatus('列印中', 'warn');
-    log('收到任務：' + jobKey + ' type=' + jobVal.type);
-
-    var jobRef = db.ref('printJobs/' + storeId + '/' + jobKey);
-
-    jobRef.update({ status: 'PRINTING', printingAt: new Date().toISOString() })
-      .then(function(){ return printHTML(jobVal.html || ''); })
-      .then(function(){
-        log('列印完成：' + jobKey);
-        return jobRef.update({ status: 'DONE', doneAt: new Date().toISOString() });
-      })
-      .then(function(){
-        isPrinting = false;
-        setStatus('監聽中', 'ok');
-      })
-      .catch(function(err){
-        log('列印失敗：' + jobKey + ' err=' + (err && err.message ? err.message : err));
-        jobRef.update({ status: 'ERROR', errorAt: new Date().toISOString(), errorMsg: String(err && err.message ? err.message : err) })
-          .then(function(){ isPrinting = false; setStatus('監聽中', 'ok'); });
+  /* -----------------------------
+     Transactions (Queue & Stock)
+  ----------------------------- */
+  function nextQueueNoTx(dateKey) {
+    var ref = db.ref('dailyCounters/' + dateKey + '/queue');
+    return ref.transaction(function(cur){ return (cur || 0) + 1; })
+      .then(function(res){
+        if (!res.committed) throw new Error('Queue transaction failed');
+        return padLeft(res.snapshot.val(), 3);
       });
   }
 
-  function startListening() {
-    var storeId = (document.getElementById('storeId').value || 'default').trim() || 'default';
-    if (listeningRef) listeningRef.off();
-
-    listeningRef = db.ref('printJobs/' + storeId);
-    setStatus('監聽中', 'ok');
-    log('開始監聽：printJobs/' + storeId);
-
-    listeningRef.on('child_added', function(snap){ processJob(snap.key, snap.val(), storeId); });
-    listeningRef.on('child_changed', function(snap){ processJob(snap.key, snap.val(), storeId); });
-
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('stopBtn').disabled = false;
+  function decStockTx(menuId, qty) {
+    qty = qty || 1;
+    var ref = db.ref('menu/' + menuId + '/stock');
+    return ref.transaction(function(cur){
+      if (cur === null) return;       // cancel
+      if (cur < qty) return;          // cancel
+      return cur - qty;
+    }).then(function(res){ return !!res.committed; });
   }
 
-  function stopListening() {
-    if (listeningRef) listeningRef.off();
-    listeningRef = null;
-    setStatus('已停止', 'err');
-    log('停止監聽');
-    document.getElementById('startBtn').disabled = false;
-    document.getElementById('stopBtn').disabled = true;
+  function incStockTx(menuId, qty) {
+    qty = qty || 1;
+    var ref = db.ref('menu/' + menuId + '/stock');
+    return ref.transaction(function(cur){
+      if (cur === null) return (0 + qty);
+      return cur + qty;
+    }).then(function(res){ return !!res.committed; });
   }
 
-  function sendTestJob() {
-    var storeId = (document.getElementById('storeId').value || 'default').trim() || 'default';
-    var html = ''
-      + '<div class="print-page" style="text-align:center;">'
-      + '<h2 style="margin:0;">測試列印</h2>'
-      + '<h1 style="margin:2mm 0;">#TEST</h1>'
-      + '<div style="font-size:9pt;">' + new Date().toLocaleString() + '</div>'
-      + '<hr><div style="text-align:left;">'
-      + '<div style="display:flex;justify-content:space-between;"><span>測試品項</span><span>$10</span></div>'
-      + '</div><hr>'
-      + '<div style="display:flex; justify-content:space-between; font-size:16pt; font-weight:bold;"><span>總計</span><span>$10</span></div>'
-      + '</div>';
+  /* -----------------------------
+     Render UI
+  ----------------------------- */
+  function renderMenu() {
+    var wrap = document.getElementById('menuDisplay');
+    var html = '';
+    for (var i = 0; i < menu.length; i++) {
+      var p = menu[i];
+      var disabled = (Number(p.stock) <= 0);
+      html += ''
+        + '<div class="' + (disabled ? 'bg-slate-200 opacity-60 cursor-not-allowed' : 'bg-white active:bg-blue-50 cursor-pointer')
+        + ' p-6 rounded-[2rem] border shadow-sm h-40 flex flex-col justify-between relative active:scale-95 transition-all"'
+        + ' data-id="' + escapeHTML(p.id) + '">'
+        +   '<span class="name font-black text-slate-800 text-xl leading-tight"></span>'
+        +   '<div class="flex justify-between items-end">'
+        +     '<span class="text-blue-600 font-black text-2xl">$' + escapeHTML(p.price) + '</span>'
+        +     '<span class="text-xs font-bold text-slate-400">STOCK: ' + escapeHTML(p.stock) + '</span>'
+        +   '</div>'
+        +   (disabled ? '<span class="absolute inset-0 flex items-center justify-center font-black text-red-500 rotate-12 text-2xl">SOLD OUT</span>' : '')
+        + '</div>';
+    }
+    wrap.innerHTML = html;
 
-    db.ref('printJobs/' + storeId).push({
-      status: 'NEW',
-      createdAt: new Date().toISOString(),
-      type: 'test',
-      html: html,
-      meta: { test: true }
-    }).then(function(){ log('已送出測試任務'); });
+    var cards = wrap.children;
+    for (var j = 0; j < cards.length; j++) {
+      (function(idx){
+        var card = cards[idx];
+        var p2 = menu[idx];
+        card.querySelector('.name').textContent = p2.name;
+        if (Number(p2.stock) > 0) {
+          card.addEventListener('click', function(){ addItemToCart(p2.id); });
+        }
+      })(j);
+    }
   }
 
-  document.getElementById('startBtn').addEventListener('click', startListening);
-  document.getElementById('stopBtn').addEventListener('click', stopListening);
-  document.getElementById('testBtn').addEventListener('click', sendTestJob);
+  function addItemToCart(menuId) {
+    var m = null;
+    for (var i = 0; i < menu.length; i++) if (menu[i].id === menuId) { m = menu[i]; break; }
+    if (!m || Number(m.stock) <= 0) return;
+    cart.push({ menuId: m.id, name: m.name, price: Number(m.price) });
+    renderCartUI();
+    if (window.innerWidth < 1024) sidebarToggle(true);
+  }
 
-  log('提醒：POS 設定頁的 Store ID 必須跟這裡一致。');
+  function renderCartUI() {
+    document.getElementById('mobileCartCount').innerText = String(cart.length);
+    var container = document.getElementById('cartItems');
+
+    if (cart.length === 0) {
+      container.innerHTML = '<div class="h-full flex items-center justify-center text-slate-300 italic py-20">等待點餐...</div>';
+      document.getElementById('totalPrice').innerText = '0';
+      return;
+    }
+
+    var html = '';
+    for (var i = 0; i < cart.length; i++) {
+      html += ''
+        + '<div class="flex justify-between items-center bg-slate-50 p-5 rounded-2xl border text-lg font-bold">'
+        +   '<span class="item-name"></span>'
+        +   '<div class="flex items-center space-x-4">'
+        +     '<span>$' + escapeHTML(cart[i].price) + '</span>'
+        +     '<button class="remove-btn w-10 h-10 bg-white text-red-500 rounded-full shadow-sm flex items-center justify-center text-xl font-black" data-idx="' + i + '">✕</button>'
+        +   '</div>'
+        + '</div>';
+    }
+    container.innerHTML = html;
+
+    var rows = container.children;
+    for (var r = 0; r < rows.length; r++) rows[r].querySelector('.item-name').textContent = cart[r].name;
+
+    var btns = container.querySelectorAll('.remove-btn');
+    for (var b = 0; b < btns.length; b++) {
+      btns[b].addEventListener('click', function(e){
+        e.stopPropagation();
+        var idx = Number(this.getAttribute('data-idx'));
+        cart.splice(idx, 1);
+        renderCartUI();
+      });
+    }
+
+    var total = 0;
+    for (var t = 0; t < cart.length; t++) total += Number(cart[t].price || 0);
+    document.getElementById('totalPrice').innerText = fmtMoney(total);
+  }
+
+  function renderKDSUI() {
+    var wrap = document.getElementById('kdsContainer');
+    var html = '';
+    for (var i = 0; i < kdsOrders.length; i++) {
+      var o = kdsOrders[i];
+      var itemsHtml = '';
+      if (o.items && o.items.length) {
+        for (var k = 0; k < o.items.length; k++) {
+          itemsHtml += '<div class="border-b pb-2">□ ' + escapeHTML(o.items[k].name) + '</div>';
+        }
+      }
+      html += ''
+        + '<div class="w-80 bg-white rounded-[2.5rem] shadow-2xl flex-shrink-0 flex flex-col border-4 border-blue-500 overflow-hidden h-fit">'
+        +   '<div class="bg-blue-600 text-white p-5 flex justify-between items-center">'
+        +     '<span class="text-4xl font-black">#' + escapeHTML(o.queueNo) + '</span>'
+        +     '<span class="font-mono text-xl timer" data-start="' + escapeHTML(o.time) + '">00:00</span>'
+        +   '</div>'
+        +   '<div class="p-6 space-y-3 font-black text-2xl text-slate-700">' + itemsHtml + '</div>'
+        +   '<button class="done-btn bg-emerald-500 text-white py-8 text-3xl font-black active:bg-emerald-700 transition" data-kdskey="' + escapeHTML(o.__key) + '">完成</button>'
+        + '</div>';
+    }
+    wrap.innerHTML = html;
+
+    var doneBtns = wrap.querySelectorAll('.done-btn');
+    for (var j = 0; j < doneBtns.length; j++) {
+      doneBtns[j].addEventListener('click', function(){
+        var key = this.getAttribute('data-kdskey');
+        if (!key) return;
+        db.ref('kds').child(key).remove();
+      });
+    }
+  }
+
+  function renderReportUI() {
+    var today = todayKeyISO();
+    var filtered = [];
+    for (var i = 0; i < sales.length; i++) {
+      var d = (sales[i].date || '').split('T')[0];
+      if (d === today) filtered.push(sales[i]);
+    }
+    filtered.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+
+    var revenue = 0;
+    for (var r = 0; r < filtered.length; r++) revenue += Number(filtered[r].total || 0);
+
+    document.getElementById('totalRevenue').innerText = '$' + fmtMoney(revenue);
+    document.getElementById('totalOrders').innerText = String(filtered.length);
+
+    var body = document.getElementById('reportTableBody');
+    var html = '';
+    for (var j = 0; j < filtered.length; j++) {
+      var s = filtered[j];
+      var timeText = '';
+      try { timeText = new Date(s.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+      catch(e) { timeText = new Date(s.date).toLocaleTimeString(); }
+
+      html += ''
+        + '<tr>'
+        +   '<td class="p-6 text-blue-600 font-black">' + escapeHTML(timeText) + '</td>'
+        +   '<td class="p-6 text-center text-2xl font-black">#' + escapeHTML(s.queueNo) + '</td>'
+        +   '<td class="p-6 text-right font-black text-2xl">$' + fmtMoney(s.total) + '</td>'
+        +   '<td class="p-6 text-center"><button class="void-btn text-red-500 font-black border-2 border-red-50 px-4 py-1 rounded-xl active:bg-red-50 transition" data-orderid="' + escapeHTML(s.orderId) + '">作廢</button></td>'
+        + '</tr>';
+    }
+    body.innerHTML = html;
+
+    var voidBtns = body.querySelectorAll('.void-btn');
+    for (var vb = 0; vb < voidBtns.length; vb++) {
+      voidBtns[vb].addEventListener('click', function(){ voidOrder(this.getAttribute('data-orderid')); });
+    }
+  }
+
+  function refreshKDSTimers() {
+    var els = document.querySelectorAll('.timer');
+    for (var i = 0; i < els.length; i++) {
+      var start = new Date(els[i].getAttribute('data-start'));
+      if (isNaN(start.getTime())) continue;
+      var diff = Math.floor((new Date() - start) / 1000);
+      var m = Math.floor(diff / 60);
+      var s = diff % 60;
+      els[i].textContent = padLeft(m, 2) + ':' + padLeft(s, 2);
+    }
+  }
+
+  function updateQueueDisplayFromCounter(counterVal) {
+    var next = Number(counterVal || 0) + 1;
+    document.getElementById('nextQueueNo').innerText = padLeft(next, 3);
+  }
+
+  /* -----------------------------
+     Admin actions
+  ----------------------------- */
+  function saveSettings() {
+    var storeId = (document.getElementById('cfgStoreId').value || '').trim() || 'default';
+    var storeName = (document.getElementById('cfgStoreName').value || '').trim() || 'PRO POS';
+    var phone = (document.getElementById('cfgPhone').value || '').trim();
+    var note = (document.getElementById('cfgNote').value || '').trim();
+
+    db.ref('settings').set({ storeId: storeId, storeName: storeName, phone: phone, note: note })
+      .then(function(){ showToast('設定已同步'); })
+      .catch(function(err){ showToast('儲存失敗：' + (err && err.message ? err.message : err)); });
+  }
+
+  function addProduct() {
+    var name = (document.getElementById('newProdName').value || '').trim();
+    var price = Number(document.getElementById('newProdPrice').value);
+    var stock = Number(document.getElementById('newProdStock').value);
+    if (!isFinite(stock)) stock = 0;
+    if (!name || !isFinite(price) || price <= 0) return;
+
+    var ref = db.ref('menu').push();
+    ref.set({ id: ref.key, name: name, price: price, stock: Math.floor(stock) })
+      .then(function(){
+        document.getElementById('newProdName').value = '';
+        document.getElementById('newProdPrice').value = '';
+        document.getElementById('newProdStock').value = '';
+        showToast('新增完成');
+      })
+      .catch(function(err){ showToast('新增失敗：' + (err && err.message ? err.message : err)); });
+  }
+
+  function renderAdminUI() {
+    var wrap = document.getElementById('menuListUI');
+    var html = '';
+    for (var i = 0; i < menu.length; i++) {
+      var p = menu[i];
+      html += ''
+        + '<div class="flex justify-between items-center bg-white p-6 rounded-3xl border shadow-sm">'
+        +   '<div class="flex flex-col">'
+        +     '<span class="name font-black text-slate-700 text-xl font-sans"></span>'
+        +     '<span class="text-blue-600 font-black">$' + escapeHTML(p.price) + '</span>'
+        +   '</div>'
+        +   '<div class="flex items-center space-x-4">'
+        +     '<input type="number" value="' + escapeHTML(p.stock) + '" class="stock-input w-20 p-2 border-2 rounded-xl text-center font-black text-xl" data-id="' + escapeHTML(p.id) + '">'
+        +     '<button class="delete-btn text-red-500 font-black px-4 text-2xl" data-id="' + escapeHTML(p.id) + '">✕</button>'
+        +   '</div>'
+        + '</div>';
+    }
+    wrap.innerHTML = html;
+
+    var rows = wrap.children;
+    for (var r = 0; r < rows.length; r++) rows[r].querySelector('.name').textContent = menu[r].name;
+
+    var stockInputs = wrap.querySelectorAll('.stock-input');
+    for (var s = 0; s < stockInputs.length; s++) {
+      stockInputs[s].addEventListener('change', function(){
+        var id = this.getAttribute('data-id');
+        var val = Number(this.value);
+        if (!id || !isFinite(val) || val < 0) return;
+        db.ref('menu').child(id).update({ stock: Math.floor(val) });
+      });
+    }
+
+    var delBtns = wrap.querySelectorAll('.delete-btn');
+    for (var d = 0; d < delBtns.length; d++) {
+      delBtns[d].addEventListener('click', function(){
+        var id = this.getAttribute('data-id');
+        if (!id) return;
+        if (!confirm('刪除？')) return;
+        db.ref('menu').child(id).remove();
+      });
+    }
+  }
+
+  function exportToExcel() {
+    var rows = [];
+    for (var i = 0; i < sales.length; i++) {
+      var s = sales[i];
+      var itemsText = '';
+      if (s.items && s.items.length) {
+        var names = [];
+        for (var k = 0; k < s.items.length; k++) names.push(s.items[k].name);
+        itemsText = names.join(',');
+      }
+      rows.push({ '時間': s.date, '單號': s.orderId, '取單號': s.queueNo, '總額': s.total, '內容': itemsText });
+    }
+    var ws = XLSX.utils.json_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sales");
+    XLSX.writeFile(wb, (settings.storeName || 'POS') + "_報表.xlsx");
+  }
+
+  /* -----------------------------
+     Void order (restock + delete)
+  ----------------------------- */
+  function voidOrder(oId) {
+    if (!oId) return;
+    if (!confirm('確認作廢此訂單？庫存將回補雲端。')) return;
+
+    db.ref('sales').orderByChild('orderId').equalTo(oId).once('value')
+      .then(function(snap){
+        if (!snap.exists()) return;
+
+        var promises = [];
+        snap.forEach(function(child){
+          var order = child.val() || {};
+          var items = order.items || [];
+
+          var cm = {};
+          for (var i = 0; i < items.length; i++) {
+            if (!items[i].menuId) continue;
+            cm[items[i].menuId] = (cm[items[i].menuId] || 0) + 1;
+          }
+
+          for (var mid in cm) if (cm.hasOwnProperty(mid)) promises.push(incStockTx(mid, cm[mid]));
+          promises.push(child.ref.remove());
+        });
+
+        return Promise.all(promises);
+      })
+      .catch(function(err){ showToast('作廢失敗：' + (err && err.message ? err.message : err)); });
+  }
+
+  /* -----------------------------
+     Checkout (Cloud Print) + Watchdog
+     ✅ 修正：避免 iPad 結帳後「看起來卡死」
+     - 不用 alert（用 toast）
+     - watchdog 超時自動解鎖按鈕
+     - overlay 一律關掉
+  ----------------------------- */
+  function cleanupCheckout(btn, watchdogTimer) {
+    if (watchdogTimer) clearTimeout(watchdogTimer);
+    busyCheckout = false;
+    btn.disabled = false;
+    btn.classList.remove('opacity-60');
+    sidebarToggle(false); // ✅ 修正：不管怎樣先把遮罩收掉
+  }
+
+  function processCheckout() {
+    if (busyCheckout) return;
+    if (cart.length === 0) return;
+
+    busyCheckout = true;
+    var btn = document.getElementById('checkoutBtn');
+    btn.disabled = true;
+    btn.classList.add('opacity-60');
+
+    // ✅ 修正：看門狗，避免 Firebase 卡住導致永遠鎖死
+    var watchdog = setTimeout(function(){
+      busyCheckout = false;
+      btn.disabled = false;
+      btn.classList.remove('opacity-60');
+      sidebarToggle(false);
+      showToast('結帳逾時，已解除鎖定（請檢查網路/雲端）');
+    }, 8000);
+
+    var dateKey = todayKeyISO();
+
+    // count map by menuId
+    var countMap = {};
+    for (var i = 0; i < cart.length; i++) {
+      var id = cart[i].menuId;
+      countMap[id] = (countMap[id] || 0) + 1;
+    }
+
+    var menuIds = [];
+    for (var k in countMap) if (countMap.hasOwnProperty(k)) menuIds.push(k);
+
+    var now = new Date();
+    var oId = String(Date.now()).slice(-6);
+    var total = 0;
+    for (var t = 0; t < cart.length; t++) total += Number(cart[t].price || 0);
+
+    var qNo = null;
+
+    nextQueueNoTx(dateKey)
+      .then(function(queueNo){
+        qNo = queueNo;
+
+        // serial stock deductions
+        var chain = Promise.resolve(true);
+        for (var i2 = 0; i2 < menuIds.length; i2++) {
+          (function(mid){
+            chain = chain.then(function(ok){
+              if (!ok) return false;
+              return decStockTx(mid, countMap[mid]);
+            });
+          })(menuIds[i2]);
+        }
+        return chain;
+      })
+      .then(function(ok){
+        if (!ok) {
+          showToast('庫存不足，已取消結帳');
+          throw new Error('STOCK_NOT_ENOUGH');
+        }
+
+        var oData = { date: now.toISOString(), total: total, queueNo: qNo, orderId: oId, items: cart.slice() };
+
+        return db.ref('sales').push(oData)
+          .then(function(){ return db.ref('kds').push({ queueNo: qNo, items: cart.slice(), time: now.toISOString(), orderId: oId }); })
+          .then(function(){
+            // build receipt html
+            var printHtml = ''
+              + '<div class="print-page" style="text-align:center;">'
+              +   '<h2 style="margin:0;">' + escapeHTML(settings.storeName) + '</h2>'
+              +   '<h1 style="margin:2mm 0;">#' + escapeHTML(qNo) + '</h1>'
+              +   '<div style="font-size:9pt;">' + escapeHTML(now.toLocaleString()) + '</div>'
+              +   '<hr>'
+              +   '<div style="width:100%; text-align:left;">';
+
+            for (var i4 = 0; i4 < cart.length; i4++) {
+              printHtml += ''
+                + '<div style="display:flex; justify-content:space-between; margin-bottom:1mm;">'
+                +   '<span style="font-weight:bold;">' + escapeHTML(cart[i4].name) + '</span>'
+                +   '<span>$' + escapeHTML(cart[i4].price) + '</span>'
+                + '</div>';
+            }
+
+            printHtml += ''
+              +   '</div>'
+              +   '<hr>'
+              +   '<div style="display:flex; justify-content:space-between; font-size:16pt; font-weight:bold;">'
+              +     '<span>總計</span>'
+              +     '<span>$' + escapeHTML(total) + '</span>'
+              +   '</div>'
+              +   '<div style="font-size:9pt; margin-top:4mm;">'
+              +     escapeHTML(settings.phone) + '<br>'
+              +     escapeHTML(settings.note || '') + '<br>'
+              +     '*** 謝謝惠顧 ***'
+              +   '</div>'
+              + '</div>';
+
+            return enqueuePrintJob({ type: 'receipt', html: printHtml, meta: { queueNo: qNo, orderId: oId, total: total } });
+          });
+      })
+      .then(function(){
+        cart = [];
+        renderCartUI();
+        showToast('結帳完成！取單號 #' + qNo + '（列印已送出）');
+        cleanupCheckout(btn, watchdog);
+      })
+      .catch(function(err){
+        if (err && err.message === 'STOCK_NOT_ENOUGH') {
+          // 已提示
+        } else {
+          showToast('結帳失敗：' + (err && err.message ? err.message : err));
+        }
+        cleanupCheckout(btn, watchdog);
+      });
+  }
+
+  /* -----------------------------
+     Init
+  ----------------------------- */
+  function init() {
+    // tabs
+    var tabBtns = document.querySelectorAll('header nav button[data-tab]');
+    for (var i = 0; i < tabBtns.length; i++) {
+      tabBtns[i].addEventListener('click', function(){ changeTab(this.getAttribute('data-tab')); });
+    }
+
+    // sidebar buttons
+    document.getElementById('openSidebarBtn').addEventListener('click', function(){ sidebarToggle(true); });
+    document.getElementById('closeSidebarBtn').addEventListener('click', function(){ sidebarToggle(false); });
+
+    // actions
+    document.getElementById('checkoutBtn').addEventListener('click', processCheckout);
+    document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+    document.getElementById('addProductBtn').addEventListener('click', addProduct);
+    document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
+
+    // settings sync
+    db.ref('settings').on('value', function(snap){
+      if (!snap.exists()) return;
+      settings = snap.val() || settings;
+      if (!settings.storeId) settings.storeId = 'default';
+      if (!settings.storeName) settings.storeName = 'PRO POS';
+      if (!settings.phone) settings.phone = '';
+      if (!settings.note) settings.note = '';
+
+      safeText(document.getElementById('displayStoreName'), settings.storeName);
+      document.getElementById('cfgStoreId').value = settings.storeId || 'default';
+      document.getElementById('cfgStoreName').value = settings.storeName || '';
+      document.getElementById('cfgPhone').value = settings.phone || '';
+      document.getElementById('cfgNote').value = settings.note || '';
+    });
+
+    // menu sync
+    db.ref('menu').on('value', function(snap){
+      var arr = snapToArrayWithKey(snap);
+      var out = [];
+      for (var i = 0; i < arr.length; i++) {
+        var x = arr[i] || {};
+        out.push({
+          id: x.id || x.__key,
+          name: x.name || '',
+          price: Number(x.price || 0),
+          stock: Number(x.stock || 0)
+        });
+      }
+      out.sort(function(a,b){ return (a.name||'').localeCompare((b.name||''), 'zh-Hant'); });
+      menu = out;
+      renderMenu();
+      renderAdminUI();
+    });
+
+    // sales sync
+    db.ref('sales').on('value', function(snap){
+      var arr = snapToArrayWithKey(snap);
+      for (var i = 0; i < arr.length; i++) arr[i].total = Number(arr[i].total || 0);
+      sales = arr;
+      if (document.getElementById('reportTab').classList.contains('active')) renderReportUI();
+    });
+
+    // kds sync
+    db.ref('kds').on('value', function(snap){
+      var arr = snapToArrayWithKey(snap);
+      arr.sort(function(a,b){ return new Date(a.time) - new Date(b.time); });
+      kdsOrders = arr;
+      renderKDSUI();
+    });
+
+    // queue preview
+    var dateKey = todayKeyISO();
+    db.ref('dailyCounters/' + dateKey + '/queue').on('value', function(snap){
+      updateQueueDisplayFromCounter(snap.val() || 0);
+    });
+
+    // clock/timers
+    setInterval(function(){ document.getElementById('digitalClock').innerText = new Date().toLocaleTimeString(); }, 1000);
+    setInterval(refreshKDSTimers, 1000);
+
+    renderCartUI();
+  }
+
+  init();
 </script>
+
 </body>
 </html>
