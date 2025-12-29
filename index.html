@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>南屯任烤魚 - 雲端版 v17 (Stable)</title>
+  <title>南屯任烤魚 - 雲端版 v17 (Universal Stable)</title>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -141,7 +141,7 @@
 
 <script>
   /* Firebase 初始化 */
-  const firebaseConfig = {
+  var firebaseConfig = {
     apiKey: "AIzaSyB4V2Zfzl_22tka2QHfkNSGaa23ke2TeWk",
     authDomain: "flash-e1c46.firebaseapp.com",
     projectId: "flash-e1c46",
@@ -153,33 +153,40 @@
   };
 
   firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+  var db = firebase.database();
 
   /* 系統狀態 */
-  let settings = { storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
-  let menu = [];       // [{id,name,price,stock}]
-  let sales = [];      // [{... , __key}]
-  let kdsOrders = [];  // [{... , __key}]
-  let cart = [];       // [{menuId,name,price}]
+  var settings = { storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
+  var menu = [];      // [{id,name,price,stock}]
+  var sales = [];     // [{... , __key}]
+  var kdsOrders = []; // [{... , __key}]
+  var cart = [];      // [{menuId,name,price}]
+  var busyCheckout = false;
 
-  let busyCheckout = false;
-
-  /* 小工具 */
+  /* Utility */
   function todayKeyISO() {
     return new Date().toISOString().split('T')[0];
   }
-
   function fmtMoney(n) {
-    return Number(n || 0).toLocaleString();
+    n = Number(n || 0);
+    return n.toLocaleString();
   }
-
   function safeText(el, text) {
-    el.textContent = String(text ?? '');
+    el.textContent = String(text !== undefined && text !== null ? text : '');
+  }
+  function escapeHTML(str) {
+    str = String(str !== undefined && str !== null ? str : '');
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   function sidebarToggle(open) {
-    const sb = document.getElementById('sidebar');
-    const ov = document.getElementById('sidebarOverlay');
+    var sb = document.getElementById('sidebar');
+    var ov = document.getElementById('sidebarOverlay');
     if (open) {
       sb.classList.add('sidebar-active');
       ov.classList.remove('hidden');
@@ -190,78 +197,98 @@
   }
 
   function changeTab(id) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    var tabs = document.querySelectorAll('.tab-content');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
     document.getElementById(id).classList.add('active');
     if (id === 'reportTab') renderReportUI();
     sidebarToggle(false);
   }
 
-  /* Firebase 讀取保持 key（很重要） */
   function snapToArrayWithKey(snap) {
-    const out = [];
-    snap.forEach(child => {
-      const v = child.val();
-      out.push({ ...v, __key: child.key });
+    var out = [];
+    snap.forEach(function(child) {
+      var v = child.val() || {};
+      v.__key = child.key;
+      out.push(v);
     });
     return out;
   }
 
-  /* 取號 transaction（避免重號） */
-  async function nextQueueNoTx(dateKey) {
-    const ref = db.ref(`dailyCounters/${dateKey}/queue`);
-    const res = await ref.transaction(cur => (cur || 0) + 1);
-    if (!res.committed) throw new Error('Queue transaction failed');
-    const num = res.snapshot.val();
-    return String(num).padStart(3, '0');
-  }
-
-  /* 扣庫存 transaction（避免負數） */
-  async function decStockTx(menuId, qty = 1) {
-    const ref = db.ref(`menu/${menuId}/stock`);
-    const res = await ref.transaction(cur => {
-      if (cur === null) return;        // 商品不存在 -> 取消
-      if (cur < qty) return;           // 庫存不足 -> 取消
-      return cur - qty;
+  /* Transactions */
+  function nextQueueNoTx(dateKey) {
+    var ref = db.ref('dailyCounters/' + dateKey + '/queue');
+    return ref.transaction(function(cur) {
+      return (cur || 0) + 1;
+    }).then(function(res) {
+      if (!res.committed) throw new Error('Queue transaction failed');
+      return String(res.snapshot.val()).padStart(3, '0');
     });
-    return res.committed;
   }
 
-  async function incStockTx(menuId, qty = 1) {
-    const ref = db.ref(`menu/${menuId}/stock`);
-    const res = await ref.transaction(cur => {
+  function decStockTx(menuId, qty) {
+    qty = qty || 1;
+    var ref = db.ref('menu/' + menuId + '/stock');
+    return ref.transaction(function(cur) {
+      if (cur === null) return;         // cancel
+      if (cur < qty) return;            // cancel
+      return cur - qty;
+    }).then(function(res) {
+      return !!res.committed;
+    });
+  }
+
+  function incStockTx(menuId, qty) {
+    qty = qty || 1;
+    var ref = db.ref('menu/' + menuId + '/stock');
+    return ref.transaction(function(cur) {
       if (cur === null) return (0 + qty);
       return cur + qty;
+    }).then(function(res) {
+      return !!res.committed;
     });
-    return res.committed;
   }
 
-  /* UI 渲染 */
+  /* UI render */
   function renderMenu() {
-    const wrap = document.getElementById('menuDisplay');
-    wrap.innerHTML = menu.map(p => `
-      <div class="${p.stock <= 0 ? 'bg-slate-200 opacity-60 cursor-not-allowed' : 'bg-white active:bg-blue-50 cursor-pointer'} p-6 rounded-[2rem] border shadow-sm h-40 flex flex-col justify-between relative active:scale-95 transition-all"
-           data-id="${p.id}">
-        <span class="font-black text-slate-800 text-xl leading-tight"></span>
-        <div class="flex justify-between items-end">
-          <span class="text-blue-600 font-black text-2xl">$${p.price}</span>
-          <span class="text-xs font-bold text-slate-400">STOCK: ${p.stock}</span>
-        </div>
-        ${p.stock <= 0 ? '<span class="absolute inset-0 flex items-center justify-center font-black text-red-500 rotate-12 text-2xl">SOLD OUT</span>' : ''}
-      </div>
-    `).join('');
+    var wrap = document.getElementById('menuDisplay');
+    var html = '';
+    for (var i = 0; i < menu.length; i++) {
+      var p = menu[i];
+      var disabled = (Number(p.stock) <= 0);
+      html += ''
+        + '<div class="' + (disabled ? 'bg-slate-200 opacity-60 cursor-not-allowed' : 'bg-white active:bg-blue-50 cursor-pointer')
+        + ' p-6 rounded-[2rem] border shadow-sm h-40 flex flex-col justify-between relative active:scale-95 transition-all"'
+        + ' data-id="' + escapeHTML(p.id) + '">'
+        +   '<span class="name font-black text-slate-800 text-xl leading-tight"></span>'
+        +   '<div class="flex justify-between items-end">'
+        +     '<span class="text-blue-600 font-black text-2xl">$' + escapeHTML(p.price) + '</span>'
+        +     '<span class="text-xs font-bold text-slate-400">STOCK: ' + escapeHTML(p.stock) + '</span>'
+        +   '</div>'
+        +   (disabled ? '<span class="absolute inset-0 flex items-center justify-center font-black text-red-500 rotate-12 text-2xl">SOLD OUT</span>' : '')
+        + '</div>';
+    }
+    wrap.innerHTML = html;
 
-    [...wrap.children].forEach((card, idx) => {
-      const p = menu[idx];
-      safeText(card.querySelector('span'), p.name);
-      if (p.stock > 0) {
-        card.addEventListener('click', () => addItemToCart(p.id));
-      }
-    });
+    var cards = wrap.children;
+    for (var j = 0; j < cards.length; j++) {
+      (function(idx) {
+        var card = cards[idx];
+        var p2 = menu[idx];
+        card.querySelector('.name').textContent = p2.name;
+        if (Number(p2.stock) > 0) {
+          card.addEventListener('click', function() { addItemToCart(p2.id); });
+        }
+      })(j);
+    }
   }
 
   function addItemToCart(menuId) {
-    const m = menu.find(x => x.id === menuId);
-    if (!m || m.stock <= 0) return;
+    var m = null;
+    for (var i = 0; i < menu.length; i++) {
+      if (menu[i].id === menuId) { m = menu[i]; break; }
+    }
+    if (!m || Number(m.stock) <= 0) return;
+
     cart.push({ menuId: m.id, name: m.name, price: Number(m.price) });
     renderCartUI();
     if (window.innerWidth < 1024) sidebarToggle(true);
@@ -269,341 +296,416 @@
 
   function renderCartUI() {
     document.getElementById('mobileCartCount').innerText = String(cart.length);
-    const container = document.getElementById('cartItems');
+    var container = document.getElementById('cartItems');
 
     if (cart.length === 0) {
-      container.innerHTML = `<div class="h-full flex items-center justify-center text-slate-300 italic py-20">等待點餐...</div>`;
+      container.innerHTML = '<div class="h-full flex items-center justify-center text-slate-300 italic py-20">等待點餐...</div>';
       document.getElementById('totalPrice').innerText = '0';
       return;
     }
 
-    container.innerHTML = cart.map((i, idx) => `
-      <div class="flex justify-between items-center bg-slate-50 p-5 rounded-2xl border text-lg font-bold">
-        <span class="item-name"></span>
-        <div class="flex items-center space-x-4">
-          <span>$${i.price}</span>
-          <button class="remove-btn w-10 h-10 bg-white text-red-500 rounded-full shadow-sm flex items-center justify-center text-xl font-black" data-idx="${idx}">✕</button>
-        </div>
-      </div>
-    `).join('');
+    var html = '';
+    for (var i = 0; i < cart.length; i++) {
+      html += ''
+        + '<div class="flex justify-between items-center bg-slate-50 p-5 rounded-2xl border text-lg font-bold">'
+        +   '<span class="item-name"></span>'
+        +   '<div class="flex items-center space-x-4">'
+        +     '<span>$' + escapeHTML(cart[i].price) + '</span>'
+        +     '<button class="remove-btn w-10 h-10 bg-white text-red-500 rounded-full shadow-sm flex items-center justify-center text-xl font-black" data-idx="' + i + '">✕</button>'
+        +   '</div>'
+        + '</div>';
+    }
+    container.innerHTML = html;
 
-    // 塞文字 + 綁事件（避免字串注入）
-    [...container.children].forEach((row, idx) => {
-      row.querySelector('.item-name').textContent = cart[idx].name;
-    });
+    var rows = container.children;
+    for (var r = 0; r < rows.length; r++) {
+      rows[r].querySelector('.item-name').textContent = cart[r].name;
+    }
 
-    container.querySelectorAll('.remove-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    var btns = container.querySelectorAll('.remove-btn');
+    for (var b = 0; b < btns.length; b++) {
+      btns[b].addEventListener('click', function(e) {
         e.stopPropagation();
-        const idx = Number(btn.dataset.idx);
+        var idx = Number(this.getAttribute('data-idx'));
         cart.splice(idx, 1);
         renderCartUI();
       });
-    });
+    }
 
-    document.getElementById('totalPrice').innerText = fmtMoney(cart.reduce((s, i) => s + Number(i.price), 0));
+    var total = 0;
+    for (var t = 0; t < cart.length; t++) total += Number(cart[t].price || 0);
+    document.getElementById('totalPrice').innerText = fmtMoney(total);
   }
 
   function renderKDSUI() {
-    const wrap = document.getElementById('kdsContainer');
-    wrap.innerHTML = kdsOrders.map(o => `
-      <div class="w-80 bg-white rounded-[2.5rem] shadow-2xl flex-shrink-0 flex flex-col border-4 border-blue-500 overflow-hidden h-fit">
-        <div class="bg-blue-600 text-white p-5 flex justify-between items-center">
-          <span class="text-4xl font-black">#${o.queueNo}</span>
-          <span class="font-mono text-xl timer" data-start="${o.time}">00:00</span>
-        </div>
-        <div class="p-6 space-y-3 font-black text-2xl text-slate-700">
-          ${Array.isArray(o.items) ? o.items.map(i => `<div class="border-b pb-2">□ ${escapeHTML(i.name)}</div>`).join('') : ''}
-        </div>
-        <button class="done-btn bg-emerald-500 text-white py-8 text-3xl font-black active:bg-emerald-700 transition" data-kdskey="${o.__key}">完成</button>
-      </div>
-    `).join('');
+    var wrap = document.getElementById('kdsContainer');
+    var html = '';
 
-    wrap.querySelectorAll('.done-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const key = btn.dataset.kdskey;
+    for (var i = 0; i < kdsOrders.length; i++) {
+      var o = kdsOrders[i];
+      var itemsHtml = '';
+      if (o.items && o.items.length) {
+        for (var k = 0; k < o.items.length; k++) {
+          itemsHtml += '<div class="border-b pb-2">□ ' + escapeHTML(o.items[k].name) + '</div>';
+        }
+      }
+      html += ''
+        + '<div class="w-80 bg-white rounded-[2.5rem] shadow-2xl flex-shrink-0 flex flex-col border-4 border-blue-500 overflow-hidden h-fit">'
+        +   '<div class="bg-blue-600 text-white p-5 flex justify-between items-center">'
+        +     '<span class="text-4xl font-black">#' + escapeHTML(o.queueNo) + '</span>'
+        +     '<span class="font-mono text-xl timer" data-start="' + escapeHTML(o.time) + '">00:00</span>'
+        +   '</div>'
+        +   '<div class="p-6 space-y-3 font-black text-2xl text-slate-700">' + itemsHtml + '</div>'
+        +   '<button class="done-btn bg-emerald-500 text-white py-8 text-3xl font-black active:bg-emerald-700 transition" data-kdskey="' + escapeHTML(o.__key) + '">完成</button>'
+        + '</div>';
+    }
+
+    wrap.innerHTML = html;
+
+    var doneBtns = wrap.querySelectorAll('.done-btn');
+    for (var j = 0; j < doneBtns.length; j++) {
+      doneBtns[j].addEventListener('click', function() {
+        var key = this.getAttribute('data-kdskey');
         if (!key) return;
-        await db.ref('kds').child(key).remove();
+        db.ref('kds').child(key).remove();
       });
-    });
+    }
   }
 
   function renderReportUI() {
-    const today = todayKeyISO();
-    const filtered = sales
-      .filter(s => (s.date || '').split('T')[0] === today)
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    var today = todayKeyISO();
+    var filtered = [];
 
-    const revenue = filtered.reduce((sum, v) => sum + Number(v.total || 0), 0);
+    for (var i = 0; i < sales.length; i++) {
+      var d = (sales[i].date || '').split('T')[0];
+      if (d === today) filtered.push(sales[i]);
+    }
 
-    document.getElementById('totalRevenue').innerText = "$" + fmtMoney(revenue);
+    filtered.sort(function(a, b) {
+      return new Date(b.date) - new Date(a.date);
+    });
+
+    var revenue = 0;
+    for (var r = 0; r < filtered.length; r++) revenue += Number(filtered[r].total || 0);
+
+    document.getElementById('totalRevenue').innerText = '$' + fmtMoney(revenue);
     document.getElementById('totalOrders').innerText = String(filtered.length);
 
-    document.getElementById('reportTableBody').innerHTML = filtered.map(s => `
-      <tr>
-        <td class="p-6 text-blue-600 font-black">${new Date(s.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
-        <td class="p-6 text-center text-2xl font-black">#${s.queueNo}</td>
-        <td class="p-6 text-right font-black text-2xl">$${fmtMoney(s.total)}</td>
-        <td class="p-6 text-center">
-          <button class="void-btn text-red-500 font-black border-2 border-red-50 px-4 py-1 rounded-xl active:bg-red-50 transition" data-orderid="${s.orderId}">作廢</button>
-        </td>
-      </tr>
-    `).join('');
+    var body = document.getElementById('reportTableBody');
+    var html = '';
+    for (var j = 0; j < filtered.length; j++) {
+      var s = filtered[j];
+      var time = new Date(s.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      html += ''
+        + '<tr>'
+        +   '<td class="p-6 text-blue-600 font-black">' + escapeHTML(time) + '</td>'
+        +   '<td class="p-6 text-center text-2xl font-black">#' + escapeHTML(s.queueNo) + '</td>'
+        +   '<td class="p-6 text-right font-black text-2xl">$' + fmtMoney(s.total) + '</td>'
+        +   '<td class="p-6 text-center"><button class="void-btn text-red-500 font-black border-2 border-red-50 px-4 py-1 rounded-xl active:bg-red-50 transition" data-orderid="' + escapeHTML(s.orderId) + '">作廢</button></td>'
+        + '</tr>';
+    }
+    body.innerHTML = html;
 
-    document.querySelectorAll('.void-btn').forEach(btn => {
-      btn.addEventListener('click', () => voidOrder(btn.dataset.orderid));
-    });
+    var voidBtns = body.querySelectorAll('.void-btn');
+    for (var vb = 0; vb < voidBtns.length; vb++) {
+      voidBtns[vb].addEventListener('click', function() {
+        voidOrder(this.getAttribute('data-orderid'));
+      });
+    }
   }
 
   function refreshKDSTimers() {
-    document.querySelectorAll('.timer').forEach(el => {
-      const start = new Date(el.dataset.start);
-      if (isNaN(start.getTime())) return;
-      const diff = Math.floor((new Date() - start) / 1000);
-      const m = Math.floor(diff / 60).toString().padStart(2, '0');
-      const s = (diff % 60).toString().padStart(2, '0');
-      el.textContent = `${m}:${s}`;
-    });
+    var els = document.querySelectorAll('.timer');
+    for (var i = 0; i < els.length; i++) {
+      var start = new Date(els[i].getAttribute('data-start'));
+      if (isNaN(start.getTime())) continue;
+      var diff = Math.floor((new Date() - start) / 1000);
+      var m = Math.floor(diff / 60);
+      var s = diff % 60;
+      var mm = String(m).padStart(2, '0');
+      var ss = String(s).padStart(2, '0');
+      els[i].textContent = mm + ':' + ss;
+    }
   }
 
   function updateQueueDisplayFromCounter(counterVal) {
-    const next = (Number(counterVal || 0) + 1);
+    var next = Number(counterVal || 0) + 1;
     document.getElementById('nextQueueNo').innerText = String(next).padStart(3, '0');
   }
 
-  /* HTML escape（KDS 顯示用，避免被品名搞爛畫面） */
-  function escapeHTML(str) {
-    return String(str ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
-  }
-
-  /* 業務：結帳（穩定版） */
-  async function processCheckout() {
+  /* 結帳（Promise chain 版本，跨裝置穩） */
+  function processCheckout() {
     if (busyCheckout) return;
     if (cart.length === 0) return;
 
     busyCheckout = true;
-    const checkoutBtn = document.getElementById('checkoutBtn');
+    var checkoutBtn = document.getElementById('checkoutBtn');
     checkoutBtn.disabled = true;
     checkoutBtn.classList.add('opacity-60');
 
-    try {
-      // 1) 取號（原子）
-      const dateKey = todayKeyISO();
-      const qNo = await nextQueueNoTx(dateKey);
+    var dateKey = todayKeyISO();
 
-      // 2) 扣庫存（逐項 transaction，避免負數）
-      // 先統計每個 menuId 的數量
-      const countMap = {};
-      for (const it of cart) countMap[it.menuId] = (countMap[it.menuId] || 0) + 1;
-
-      for (const [menuId, qty] of Object.entries(countMap)) {
-        const ok = await decStockTx(menuId, qty);
-        if (!ok) {
-          // 扣失敗就回補已扣的（盡力回滾）
-          for (const [mid, q] of Object.entries(countMap)) {
-            if (mid === menuId) break;
-            await incStockTx(mid, q);
-          }
-          alert('庫存不足或商品不存在，已取消本次結帳。');
-          return;
-        }
-      }
-
-      // 3) 寫入訂單
-      const now = new Date();
-      const oId = Date.now().toString().slice(-6);
-      const total = cart.reduce((s, i) => s + Number(i.price), 0);
-
-      const oData = {
-        date: now.toISOString(),
-        total,
-        queueNo: qNo,
-        orderId: oId,
-        items: [...cart]
-      };
-
-      await db.ref('sales').push(oData);
-      await db.ref('kds').push({ queueNo: qNo, items: [...cart], time: now.toISOString(), orderId: oId });
-
-      // 4) 列印
-      document.getElementById('printArea').innerHTML = `
-        <div class="print-page" style="text-align:center;">
-          <h2 style="margin:0;">${escapeHTML(settings.storeName)}</h2>
-          <h1 style="margin:2mm 0;">#${escapeHTML(qNo)}</h1>
-          <div style="font-size:9pt;">${escapeHTML(now.toLocaleString())}</div>
-          <hr>
-          <div style="width:100%; text-align:left;">
-            ${cart.map(i => `
-              <div style="display:flex; justify-content:space-between; margin-bottom:1mm;">
-                <span style="font-weight:bold;">${escapeHTML(i.name)}</span>
-                <span>$${escapeHTML(i.price)}</span>
-              </div>
-            `).join('')}
-          </div>
-          <hr>
-          <div style="display:flex; justify-content:space-between; font-size:16pt; font-weight:bold;">
-            <span>總計</span>
-            <span>$${escapeHTML(total)}</span>
-          </div>
-          <div style="font-size:9pt; margin-top:4mm;">
-            ${escapeHTML(settings.phone)}<br>
-            ${escapeHTML(settings.note || '')}<br>
-            *** 謝謝惠顧 ***
-          </div>
-        </div>
-      `;
-
-      window.print();
-
-      // 5) 清空
-      cart = [];
-      renderCartUI();
-      sidebarToggle(false);
-      alert('結帳完成！取單號為：' + qNo);
-
-    } catch (err) {
-      console.error(err);
-      alert('結帳失敗：' + (err?.message || err));
-    } finally {
-      busyCheckout = false;
-      checkoutBtn.disabled = false;
-      checkoutBtn.classList.remove('opacity-60');
+    // 統計每個 menuId 的數量（不用 Object.entries）
+    var countMap = {}; // {menuId: qty}
+    for (var i = 0; i < cart.length; i++) {
+      var id = cart[i].menuId;
+      countMap[id] = (countMap[id] || 0) + 1;
     }
+
+    var menuIds = [];
+    for (var k in countMap) if (countMap.hasOwnProperty(k)) menuIds.push(k);
+
+    var qNo = null;
+
+    nextQueueNoTx(dateKey)
+      .then(function(queueNo) {
+        qNo = queueNo;
+
+        // 逐項扣庫存（串行，穩但慢一點，反正 POS 不需要每秒 1000 單）
+        var chain = Promise.resolve(true);
+        for (var i2 = 0; i2 < menuIds.length; i2++) {
+          (function(mid) {
+            chain = chain.then(function(ok) {
+              if (!ok) return false;
+              return decStockTx(mid, countMap[mid]);
+            });
+          })(menuIds[i2]);
+        }
+        return chain;
+      })
+      .then(function(ok) {
+        if (!ok) {
+          alert('庫存不足或商品不存在，已取消本次結帳。');
+          throw new Error('STOCK_NOT_ENOUGH');
+        }
+
+        var now = new Date();
+        var oId = String(Date.now()).slice(-6);
+        var total = 0;
+        for (var i3 = 0; i3 < cart.length; i3++) total += Number(cart[i3].price || 0);
+
+        var oData = {
+          date: now.toISOString(),
+          total: total,
+          queueNo: qNo,
+          orderId: oId,
+          items: cart.slice()
+        };
+
+        // sales / kds 用 push（避免 key 亂掉）
+        return db.ref('sales').push(oData).then(function() {
+          return db.ref('kds').push({ queueNo: qNo, items: cart.slice(), time: now.toISOString(), orderId: oId });
+        }).then(function() {
+          // print
+          var printHtml = ''
+            + '<div class="print-page" style="text-align:center;">'
+            +   '<h2 style="margin:0;">' + escapeHTML(settings.storeName) + '</h2>'
+            +   '<h1 style="margin:2mm 0;">#' + escapeHTML(qNo) + '</h1>'
+            +   '<div style="font-size:9pt;">' + escapeHTML(now.toLocaleString()) + '</div>'
+            +   '<hr>'
+            +   '<div style="width:100%; text-align:left;">';
+
+          for (var i4 = 0; i4 < cart.length; i4++) {
+            printHtml += ''
+              + '<div style="display:flex; justify-content:space-between; margin-bottom:1mm;">'
+              +   '<span style="font-weight:bold;">' + escapeHTML(cart[i4].name) + '</span>'
+              +   '<span>$' + escapeHTML(cart[i4].price) + '</span>'
+              + '</div>';
+          }
+
+          printHtml += ''
+            +   '</div>'
+            +   '<hr>'
+            +   '<div style="display:flex; justify-content:space-between; font-size:16pt; font-weight:bold;">'
+            +     '<span>總計</span>'
+            +     '<span>$' + escapeHTML(total) + '</span>'
+            +   '</div>'
+            +   '<div style="font-size:9pt; margin-top:4mm;">'
+            +     escapeHTML(settings.phone) + '<br>'
+            +     escapeHTML(settings.note || '') + '<br>'
+            +     '*** 謝謝惠顧 ***'
+            +   '</div>'
+            + '</div>';
+
+          document.getElementById('printArea').innerHTML = printHtml;
+          window.print();
+
+          // clear cart
+          cart = [];
+          renderCartUI();
+          sidebarToggle(false);
+          alert('結帳完成！取單號為：' + qNo);
+        });
+      })
+      .catch(function(err) {
+        if (err && err.message === 'STOCK_NOT_ENOUGH') {
+          // already alerted
+        } else {
+          console.error(err);
+          alert('結帳失敗：' + (err && err.message ? err.message : err));
+        }
+      })
+      .finally(function() {
+        busyCheckout = false;
+        checkoutBtn.disabled = false;
+        checkoutBtn.classList.remove('opacity-60');
+      });
   }
 
-  /* 作廢：刪 sales + 回補庫存（使用 transaction 回補） */
-  async function voidOrder(oId) {
+  /* 作廢：回補庫存 + 刪 sales */
+  function voidOrder(oId) {
     if (!oId) return;
     if (!confirm('確認作廢此訂單？庫存將回補雲端。')) return;
 
-    // 找到 sales 裡 해당 orderId 的所有紀錄（理論上 1 筆，但你原本可能會多筆）
-    const snap = await db.ref('sales').orderByChild('orderId').equalTo(oId).once('value');
-    if (!snap.exists()) return;
+    db.ref('sales').orderByChild('orderId').equalTo(oId).once('value')
+      .then(function(snap) {
+        if (!snap.exists()) return;
 
-    const tasks = [];
-    snap.forEach(child => {
-      const order = child.val();
-      const items = Array.isArray(order.items) ? order.items : [];
+        var promises = [];
+        snap.forEach(function(child) {
+          var order = child.val() || {};
+          var items = order.items || [];
 
-      // 統計回補
-      const countMap = {};
-      for (const it of items) {
-        if (!it.menuId) continue;
-        countMap[it.menuId] = (countMap[it.menuId] || 0) + 1;
-      }
+          // 統計回補
+          var cm = {};
+          for (var i = 0; i < items.length; i++) {
+            if (!items[i].menuId) continue;
+            cm[items[i].menuId] = (cm[items[i].menuId] || 0) + 1;
+          }
 
-      for (const [menuId, qty] of Object.entries(countMap)) {
-        tasks.push(incStockTx(menuId, qty));
-      }
-      tasks.push(child.ref.remove());
-    });
+          for (var mid in cm) {
+            if (cm.hasOwnProperty(mid)) promises.push(incStockTx(mid, cm[mid]));
+          }
 
-    await Promise.all(tasks);
+          promises.push(child.ref.remove());
+        });
+
+        return Promise.all(promises);
+      })
+      .catch(function(err) {
+        console.error(err);
+        alert('作廢失敗：' + (err && err.message ? err.message : err));
+      });
   }
 
-  /* Admin：設定、商品 */
-  async function saveSettings() {
-    const storeName = document.getElementById('cfgStoreName').value.trim() || 'PRO POS';
-    const phone = document.getElementById('cfgPhone').value.trim() || '';
-    const note = document.getElementById('cfgNote').value.trim() || '';
-    await db.ref('settings').set({ storeName, phone, note });
-    alert('雲端品牌資訊已同步');
+  /* Admin */
+  function saveSettings() {
+    var storeName = (document.getElementById('cfgStoreName').value || '').trim() || 'PRO POS';
+    var phone = (document.getElementById('cfgPhone').value || '').trim();
+    var note = (document.getElementById('cfgNote').value || '').trim();
+
+    db.ref('settings').set({ storeName: storeName, phone: phone, note: note })
+      .then(function() { alert('雲端品牌資訊已同步'); })
+      .catch(function(err) { alert('儲存失敗：' + (err && err.message ? err.message : err)); });
   }
 
-  async function addProduct() {
-    const name = document.getElementById('newProdName').value.trim();
-    const price = Number(document.getElementById('newProdPrice').value);
-    const stock = Number(document.getElementById('newProdStock').value) || 0;
+  function addProduct() {
+    var name = (document.getElementById('newProdName').value || '').trim();
+    var price = Number(document.getElementById('newProdPrice').value);
+    var stock = Number(document.getElementById('newProdStock').value);
+    if (!isFinite(stock)) stock = 0;
 
-    if (!name || !Number.isFinite(price) || price <= 0) return;
+    if (!name || !isFinite(price) || price <= 0) return;
 
-    const ref = db.ref('menu').push();
-    await ref.set({ id: ref.key, name, price, stock });
-
-    document.getElementById('newProdName').value = '';
-    document.getElementById('newProdPrice').value = '';
-    document.getElementById('newProdStock').value = '';
+    var ref = db.ref('menu').push();
+    ref.set({ id: ref.key, name: name, price: price, stock: stock })
+      .then(function() {
+        document.getElementById('newProdName').value = '';
+        document.getElementById('newProdPrice').value = '';
+        document.getElementById('newProdStock').value = '';
+      })
+      .catch(function(err) {
+        alert('新增失敗：' + (err && err.message ? err.message : err));
+      });
   }
 
   function renderAdminUI() {
-    const wrap = document.getElementById('menuListUI');
-    wrap.innerHTML = menu.map(p => `
-      <div class="flex justify-between items-center bg-white p-6 rounded-3xl border shadow-sm">
-        <div class="flex flex-col">
-          <span class="font-black text-slate-700 text-xl font-sans name"></span>
-          <span class="text-blue-600 font-black">$${p.price}</span>
-        </div>
-        <div class="flex items-center space-x-4">
-          <input type="number" value="${p.stock}" class="stock-input w-20 p-2 border-2 rounded-xl text-center font-black text-xl" data-id="${p.id}">
-          <button class="delete-btn text-red-500 font-black px-4 text-2xl" data-id="${p.id}">✕</button>
-        </div>
-      </div>
-    `).join('');
+    var wrap = document.getElementById('menuListUI');
+    var html = '';
 
-    [...wrap.children].forEach((row, idx) => {
-      row.querySelector('.name').textContent = menu[idx].name;
-    });
+    for (var i = 0; i < menu.length; i++) {
+      var p = menu[i];
+      html += ''
+        + '<div class="flex justify-between items-center bg-white p-6 rounded-3xl border shadow-sm">'
+        +   '<div class="flex flex-col">'
+        +     '<span class="name font-black text-slate-700 text-xl font-sans"></span>'
+        +     '<span class="text-blue-600 font-black">$' + escapeHTML(p.price) + '</span>'
+        +   '</div>'
+        +   '<div class="flex items-center space-x-4">'
+        +     '<input type="number" value="' + escapeHTML(p.stock) + '" class="stock-input w-20 p-2 border-2 rounded-xl text-center font-black text-xl" data-id="' + escapeHTML(p.id) + '">'
+        +     '<button class="delete-btn text-red-500 font-black px-4 text-2xl" data-id="' + escapeHTML(p.id) + '">✕</button>'
+        +   '</div>'
+        + '</div>';
+    }
 
-    wrap.querySelectorAll('.stock-input').forEach(inp => {
-      inp.addEventListener('change', async () => {
-        const id = inp.dataset.id;
-        const val = Number(inp.value);
-        if (!id || !Number.isFinite(val) || val < 0) return;
-        await db.ref('menu').child(id).update({ stock: Math.floor(val) });
+    wrap.innerHTML = html;
+
+    var rows = wrap.children;
+    for (var r = 0; r < rows.length; r++) {
+      rows[r].querySelector('.name').textContent = menu[r].name;
+    }
+
+    var stockInputs = wrap.querySelectorAll('.stock-input');
+    for (var s = 0; s < stockInputs.length; s++) {
+      stockInputs[s].addEventListener('change', function() {
+        var id = this.getAttribute('data-id');
+        var val = Number(this.value);
+        if (!id || !isFinite(val) || val < 0) return;
+        db.ref('menu').child(id).update({ stock: Math.floor(val) });
       });
-    });
+    }
 
-    wrap.querySelectorAll('.delete-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.id;
+    var delBtns = wrap.querySelectorAll('.delete-btn');
+    for (var d = 0; d < delBtns.length; d++) {
+      delBtns[d].addEventListener('click', function() {
+        var id = this.getAttribute('data-id');
         if (!id) return;
         if (!confirm('刪除？')) return;
-        await db.ref('menu').child(id).remove();
+        db.ref('menu').child(id).remove();
       });
-    });
+    }
   }
 
   function exportToExcel() {
-    const ws = XLSX.utils.json_to_sheet(
-      sales.map(s => ({
-        '時間': s.date,
-        '單號': s.orderId,
-        '取單號': s.queueNo,
-        '總額': s.total,
-        '內容': Array.isArray(s.items) ? s.items.map(i => i.name).join(',') : ''
-      }))
-    );
+    var rows = [];
+    for (var i = 0; i < sales.length; i++) {
+      var s = sales[i];
+      var itemsText = '';
+      if (s.items && s.items.length) {
+        var names = [];
+        for (var k = 0; k < s.items.length; k++) names.push(s.items[k].name);
+        itemsText = names.join(',');
+      }
+      rows.push({ '時間': s.date, '單號': s.orderId, '取單號': s.queueNo, '總額': s.total, '內容': itemsText });
+    }
 
-    const wb = XLSX.utils.book_new();
+    var ws = XLSX.utils.json_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sales");
     XLSX.writeFile(wb, (settings.storeName || 'POS') + "_報表.xlsx");
   }
 
-  /* 初始化 */
+  /* Init */
   function init() {
-    // Header tabs
-    document.querySelectorAll('header nav button[data-tab]').forEach(btn => {
-      btn.addEventListener('click', () => changeTab(btn.dataset.tab));
-    });
+    // tab buttons
+    var tabBtns = document.querySelectorAll('header nav button[data-tab]');
+    for (var i = 0; i < tabBtns.length; i++) {
+      tabBtns[i].addEventListener('click', function() { changeTab(this.getAttribute('data-tab')); });
+    }
 
-    // Sidebar overlay / buttons
-    document.getElementById('sidebarOverlay').addEventListener('click', () => sidebarToggle(false));
-    document.getElementById('openSidebarBtn').addEventListener('click', () => sidebarToggle(true));
-    document.getElementById('closeSidebarBtn').addEventListener('click', () => sidebarToggle(false));
+    // sidebar
+    document.getElementById('sidebarOverlay').addEventListener('click', function() { sidebarToggle(false); });
+    document.getElementById('openSidebarBtn').addEventListener('click', function() { sidebarToggle(true); });
+    document.getElementById('closeSidebarBtn').addEventListener('click', function() { sidebarToggle(false); });
 
-    // Buttons
+    // main actions
     document.getElementById('checkoutBtn').addEventListener('click', processCheckout);
     document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
     document.getElementById('addProductBtn').addEventListener('click', addProduct);
     document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
 
-    // Settings sync
-    db.ref('settings').on('value', snap => {
+    // settings sync
+    db.ref('settings').on('value', function(snap) {
       if (!snap.exists()) return;
       settings = snap.val() || settings;
       safeText(document.getElementById('displayStoreName'), settings.storeName || 'PRO POS');
@@ -612,45 +714,50 @@
       document.getElementById('cfgNote').value = settings.note || '';
     });
 
-    // Menu sync (keep id)
-    db.ref('menu').on('value', snap => {
-      const arr = snapToArrayWithKey(snap);
-      // 確保每筆都有 id（舊資料可能沒有）
-      menu = arr.map(x => ({
-        id: x.id || x.__key,
-        name: x.name || '',
-        price: Number(x.price || 0),
-        stock: Number(x.stock || 0)
-      })).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    // menu sync
+    db.ref('menu').on('value', function(snap) {
+      var arr = snapToArrayWithKey(snap);
+      var out = [];
+      for (var i = 0; i < arr.length; i++) {
+        var x = arr[i] || {};
+        out.push({
+          id: x.id || x.__key,
+          name: x.name || '',
+          price: Number(x.price || 0),
+          stock: Number(x.stock || 0)
+        });
+      }
+      // sort by name
+      out.sort(function(a, b) { return (a.name || '').localeCompare((b.name || ''), 'zh-Hant'); });
+      menu = out;
       renderMenu();
       renderAdminUI();
     });
 
-    // Sales sync (keep key)
-    db.ref('sales').on('value', snap => {
-      sales = snapToArrayWithKey(snap).map(x => ({
-        ...x,
-        total: Number(x.total || 0)
-      }));
+    // sales sync
+    db.ref('sales').on('value', function(snap) {
+      var arr = snapToArrayWithKey(snap);
+      for (var i = 0; i < arr.length; i++) arr[i].total = Number(arr[i].total || 0);
+      sales = arr;
       renderReportUI();
     });
 
-    // KDS sync (keep key)
-    db.ref('kds').on('value', snap => {
-      kdsOrders = snapToArrayWithKey(snap)
-        .map(x => ({ ...x }))
-        .sort((a, b) => new Date(a.time) - new Date(b.time));
+    // kds sync
+    db.ref('kds').on('value', function(snap) {
+      var arr = snapToArrayWithKey(snap);
+      arr.sort(function(a, b) { return new Date(a.time) - new Date(b.time); });
+      kdsOrders = arr;
       renderKDSUI();
     });
 
-    // Queue preview (顯示下一號，實際取號仍以 transaction 為準)
-    const dateKey = todayKeyISO();
-    db.ref(`dailyCounters/${dateKey}/queue`).on('value', snap => {
+    // queue preview (display only)
+    var dateKey = todayKeyISO();
+    db.ref('dailyCounters/' + dateKey + '/queue').on('value', function(snap) {
       updateQueueDisplayFromCounter(snap.val() || 0);
     });
 
-    // Clock + KDS timers
-    setInterval(() => {
+    // clock / timers
+    setInterval(function() {
       document.getElementById('digitalClock').innerText = new Date().toLocaleTimeString();
     }, 1000);
 
@@ -661,6 +768,5 @@
 
   init();
 </script>
-
 </body>
 </html>
