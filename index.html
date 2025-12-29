@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>PRO POS - Shift + DateTime Report + Details + Void Restock</title>
+  <title>PRO POS - Shift + DateTime Report + KDS Done Fix + History Search</title>
 
   <!-- Polyfills：救老 PC / 舊 Safari（避免整頁 JS 直接死掉） -->
   <script src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"></script>
@@ -188,6 +188,10 @@
             <button id="resetReportFilterBtn" class="flex-1 py-3 rounded-2xl bg-white border font-black text-slate-700 active:bg-slate-50">重置</button>
           </div>
         </div>
+
+        <div class="text-xs text-slate-400 font-bold">
+          提醒：查不到歷史通常是因為時間範圍太窄。選「全部班別」預設抓近 30 天；選班別會自動套用該班別時間。
+        </div>
       </div>
 
       <!-- KPI + 匯出 -->
@@ -301,7 +305,6 @@
   }
 
   function toLocalInputValue(dateObj) {
-    // datetime-local 需要 YYYY-MM-DDTHH:mm
     var d = dateObj;
     var yyyy = d.getFullYear();
     var mm = padLeft(d.getMonth()+1,2);
@@ -311,15 +314,30 @@
     return yyyy + '-' + mm + '-' + dd + 'T' + hh + ':' + mi;
   }
   function parseLocalInputValue(v) {
-    // v: YYYY-MM-DDTHH:mm
     if (!v) return null;
     var d = new Date(v);
     if (isNaN(d.getTime())) return null;
     return d;
   }
 
+  function formatShiftLabel(openedAt, closedAt, status) {
+    function fmt(iso){
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '未知';
+      var y = d.getFullYear();
+      var m = padLeft(d.getMonth()+1,2);
+      var dd = padLeft(d.getDate(),2);
+      var hh = padLeft(d.getHours(),2);
+      var mi = padLeft(d.getMinutes(),2);
+      return y + '/' + m + '/' + dd + ' ' + hh + ':' + mi;
+    }
+    var a = openedAt ? fmt(openedAt) : '未知';
+    if (status === 'OPEN') return a + ' → 開班中';
+    var b = closedAt ? fmt(closedAt) : '';
+    return a + (b ? (' → ' + b) : '');
+  }
+
   function summarizeItems(items) {
-    // 回傳 "烤魚x2, 白飯x1"
     if (!items || !items.length) return '';
     var map = {};
     for (var i=0;i<items.length;i++){
@@ -354,18 +372,18 @@
   var settings = { storeId: 'default', storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
   var menu = [];
   var sales = [];
-  var kdsOrders = [];
   var cart = [];
   var busyCheckout = false;
 
   // Shift
   var currentShiftId = null;
   var shifts = []; // [{__key, openedAt, closedAt, status}]
-  var reportFilter = {
-    shiftId: '', // '' = all
-    start: null,
-    end: null
-  };
+  var reportFilter = { shiftId: '', start: null, end: null };
+
+  // KDS: 同時支援新舊路徑（解你「完成不能按」）
+  var kdsOrders = []; // [{__key, __src, queueNo, items, time, orderId}]
+  var kdsUnsubA = null;
+  var kdsUnsubB = null;
 
   /* -----------------------------
      Cloud print queue
@@ -384,7 +402,7 @@
   }
 
   /* -----------------------------
-     Shift logic
+     Shift UI
   ----------------------------- */
   function setShiftUI() {
     var badge = document.getElementById('shiftBadge');
@@ -395,7 +413,6 @@
     safeText(document.getElementById('shiftLineText'), currentShiftId ? ('開班中（班別 #' + currentShiftId.slice(-6) + '）') : '未開班（請到「報表」或「設定」開班）');
     safeText(document.getElementById('reportShiftStatus'), currentShiftId ? ('開班中 #' + currentShiftId.slice(-6)) : '未開班');
 
-    // 未開班時 queue 預覽顯示 ---
     if (!currentShiftId) safeText(document.getElementById('nextQueueNo'), '---');
   }
 
@@ -405,20 +422,11 @@
     var ref = db.ref('shifts').push();
     var shiftId = ref.key;
 
-    // 建立 shift + 設定目前班別 + 初始化 counter
-    return ref.set({ openedAt: now, closedAt: '', status: 'OPEN' })
-      .then(function(){
-        return db.ref('runtime/currentShiftId').set(shiftId);
-      })
-      .then(function(){
-        return db.ref('shiftCounters/' + shiftId + '/queue').set(0);
-      })
-      .then(function(){
-        showToast('開班完成');
-      })
-      .catch(function(err){
-        showToast('開班失敗：' + (err && err.message ? err.message : err));
-      });
+    return ref.set({ openedAt: now, closedAt: '', status: 'OPEN', shiftName: formatShiftLabel(now, '', 'OPEN') })
+      .then(function(){ return db.ref('runtime/currentShiftId').set(shiftId); })
+      .then(function(){ return db.ref('shiftCounters/' + shiftId + '/queue').set(0); })
+      .then(function(){ showToast('開班完成'); })
+      .catch(function(err){ showToast('開班失敗：' + (err && err.message ? err.message : err)); });
   }
 
   function closeShift() {
@@ -426,17 +434,18 @@
     var now = new Date().toISOString();
     var sid = currentShiftId;
 
-    // 關班：更新 shift + 清空 currentShiftId
-    return db.ref('shifts/' + sid).update({ closedAt: now, status: 'CLOSED' })
-      .then(function(){
-        return db.ref('runtime/currentShiftId').set(null);
-      })
-      .then(function(){
-        showToast('關班完成');
-      })
-      .catch(function(err){
-        showToast('關班失敗：' + (err && err.message ? err.message : err));
-      });
+    return db.ref('shifts/' + sid).once('value').then(function(snap){
+      var s = snap.val() || {};
+      var openedAt = s.openedAt || '';
+      var name = formatShiftLabel(openedAt, now, 'CLOSED');
+      return db.ref('shifts/' + sid).update({ closedAt: now, status: 'CLOSED', shiftName: name });
+    }).then(function(){
+      return db.ref('runtime/currentShiftId').set(null);
+    }).then(function(){
+      showToast('關班完成');
+    }).catch(function(err){
+      showToast('關班失敗：' + (err && err.message ? err.message : err));
+    });
   }
 
   /* -----------------------------
@@ -444,13 +453,8 @@
   ----------------------------- */
   var queueCounterUnsubRef = null;
   function listenShiftQueuePreview(shiftId) {
-    // 移除舊 listener
-    if (queueCounterUnsubRef) {
-      queueCounterUnsubRef.off();
-      queueCounterUnsubRef = null;
-    }
+    if (queueCounterUnsubRef) { queueCounterUnsubRef.off(); queueCounterUnsubRef = null; }
     if (!shiftId) { safeText(document.getElementById('nextQueueNo'), '---'); return; }
-
     var ref = db.ref('shiftCounters/' + shiftId + '/queue');
     queueCounterUnsubRef = ref;
     ref.on('value', function(snap){
@@ -488,7 +492,7 @@
   }
 
   /* -----------------------------
-     Render UI
+     Render Menu/Cart
   ----------------------------- */
   function renderMenu() {
     var wrap = document.getElementById('menuDisplay');
@@ -573,6 +577,40 @@
     document.getElementById('totalPrice').innerText = fmtMoney(total);
   }
 
+  /* -----------------------------
+     KDS (Fix: done button works for both paths)
+  ----------------------------- */
+  function normalizeKdsList(arr, src) {
+    var out = [];
+    for (var i=0;i<arr.length;i++){
+      var o = arr[i] || {};
+      out.push({
+        __key: o.__key,
+        __src: src,                 // 'kdsByOrderId' or 'kds'
+        queueNo: o.queueNo || '',
+        items: o.items || [],
+        time: o.time || o.date || '',
+        orderId: o.orderId || o.__key || ''
+      });
+    }
+    return out;
+  }
+
+  function mergeKds() {
+    // kdsOrdersTempA / kdsOrdersTempB 在 listener 更新
+    var merged = [];
+    for (var i=0;i<kdsOrdersTempA.length;i++) merged.push(kdsOrdersTempA[i]);
+    for (var j=0;j<kdsOrdersTempB.length;j++) merged.push(kdsOrdersTempB[j]);
+
+    // sort by time
+    merged.sort(function(a,b){ return new Date(a.time) - new Date(b.time); });
+    kdsOrders = merged;
+    renderKDSUI();
+  }
+
+  var kdsOrdersTempA = [];
+  var kdsOrdersTempB = [];
+
   function renderKDSUI() {
     var wrap = document.getElementById('kdsContainer');
     var html = '';
@@ -591,45 +629,63 @@
         +     '<span class="font-mono text-xl timer" data-start="' + escapeHTML(o.time) + '">00:00</span>'
         +   '</div>'
         +   '<div class="p-6 space-y-3 font-black text-2xl text-slate-700">' + itemsHtml + '</div>'
-        +   '<button class="done-btn bg-emerald-500 text-white py-8 text-3xl font-black active:bg-emerald-700 transition" data-kdskey="' + escapeHTML(o.__key) + '">完成</button>'
+        +   '<button class="done-btn bg-emerald-500 text-white py-8 text-3xl font-black active:bg-emerald-700 transition"'
+        +     ' data-src="' + escapeHTML(o.__src) + '" data-key="' + escapeHTML(o.__key) + '">完成</button>'
         + '</div>';
     }
     wrap.innerHTML = html;
 
     var doneBtns = wrap.querySelectorAll('.done-btn');
-    for (var j = 0; j < doneBtns.length; j++) {
-      doneBtns[j].addEventListener('click', function(){
-        var key = this.getAttribute('data-kdskey');
-        if (!key) return;
-        db.ref('kds').child(key).remove();
+    for (var x = 0; x < doneBtns.length; x++) {
+      doneBtns[x].addEventListener('click', function(){
+        var src = this.getAttribute('data-src');
+        var key = this.getAttribute('data-key');
+        if (!src || !key) return;
+
+        // 按來源路徑刪除，確保「完成」一定有效
+        db.ref(src).child(key).remove()
+          .then(function(){ showToast('廚房單已完成'); })
+          .catch(function(err){ showToast('完成失敗：' + (err && err.message ? err.message : err)); });
       });
     }
   }
 
+  function refreshKDSTimers() {
+    var els = document.querySelectorAll('.timer');
+    for (var i = 0; i < els.length; i++) {
+      var start = new Date(els[i].getAttribute('data-start'));
+      if (isNaN(start.getTime())) continue;
+      var diff = Math.floor((new Date() - start) / 1000);
+      var m = Math.floor(diff / 60);
+      var s = diff % 60;
+      els[i].textContent = padLeft(m, 2) + ':' + padLeft(s, 2);
+    }
+  }
+
+  /* -----------------------------
+     Report
+  ----------------------------- */
   function renderShiftSelect() {
     var sel = document.getElementById('shiftSelect');
     if (!sel) return;
 
-    var html = '<option value="">全部班別</option>';
-    // 新的在上
+    var html = '<option value="">全部班別（預設近30天）</option>';
+
     for (var i = shifts.length - 1; i >= 0; i--) {
       var s = shifts[i];
-      var label = '';
-      var openT = s.openedAt ? new Date(s.openedAt) : null;
-      var closeT = s.closedAt ? new Date(s.closedAt) : null;
-
-      var openText = openT && !isNaN(openT.getTime()) ? openT.toLocaleString() : '未知時間';
-      var closeText = (closeT && !isNaN(closeT.getTime())) ? closeT.toLocaleString() : (s.status === 'OPEN' ? '開班中' : '');
-
-      label = '#' + String(s.__key).slice(-6) + ' | ' + openText + (closeText ? (' → ' + closeText) : '');
+      var label = s.shiftName || formatShiftLabel(s.openedAt, s.closedAt, s.status);
       html += '<option value="' + escapeHTML(s.__key) + '">' + escapeHTML(label) + '</option>';
     }
     sel.innerHTML = html;
 
-    // 優先選：目前班別，否則維持原 filter
     if (currentShiftId) sel.value = currentShiftId;
     else if (reportFilter.shiftId) sel.value = reportFilter.shiftId;
     else sel.value = '';
+  }
+
+  function getShiftById(id) {
+    for (var i=0;i<shifts.length;i++) if (shifts[i].__key === id) return shifts[i];
+    return null;
   }
 
   function getFilteredSales() {
@@ -640,8 +696,8 @@
 
     for (var i = 0; i < sales.length; i++) {
       var s = sales[i] || {};
-      if ((s.status || 'OK') === 'VOID') continue;
-
+      // 你要看作廢也行，但你原邏輯是排除 VOID，維持不變（報表呈現時才顯示 VOID）
+      // 這裡改成：不排除 VOID，讓你「歷史資料」更完整；由 UI 顯示狀態
       if (shiftId && s.shiftId !== shiftId) continue;
 
       var dt = new Date(s.date);
@@ -660,7 +716,9 @@
     var filtered = getFilteredSales();
 
     var revenue = 0;
-    for (var r = 0; r < filtered.length; r++) revenue += Number(filtered[r].total || 0);
+    for (var r = 0; r < filtered.length; r++) {
+      if ((filtered[r].status || 'OK') === 'OK') revenue += Number(filtered[r].total || 0);
+    }
 
     document.getElementById('totalRevenue').innerText = '$' + fmtMoney(revenue);
     document.getElementById('totalOrders').innerText = String(filtered.length);
@@ -674,6 +732,7 @@
       catch(e) { timeText = new Date(s.date).toLocaleTimeString(); }
 
       var detail = summarizeItems(s.items || []);
+      var st = (s.status || 'OK');
 
       html += ''
         + '<tr>'
@@ -684,12 +743,15 @@
         +   '</td>'
         +   '<td class="p-6 text-right font-black text-2xl">$' + fmtMoney(s.total) + '</td>'
         +   '<td class="p-6 text-center">'
-        +     '<span class="px-3 py-1 rounded-xl text-xs font-black ' + ((s.status||'OK')==='OK' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700') + '">'
-        +       escapeHTML((s.status||'OK')==='OK' ? '正常' : '作廢')
+        +     '<span class="px-3 py-1 rounded-xl text-xs font-black '
+        +       (st==='OK' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700') + '">'
+        +       escapeHTML(st==='OK' ? '正常' : '作廢')
         +     '</span>'
         +   '</td>'
         +   '<td class="p-6 text-center">'
-        +     '<button class="void-btn text-red-500 font-black border-2 border-red-50 px-4 py-1 rounded-xl active:bg-red-50 transition" data-key="' + escapeHTML(s.__key) + '">作廢</button>'
+        +     (st==='OK'
+        +        ? '<button class="void-btn text-red-500 font-black border-2 border-red-50 px-4 py-1 rounded-xl active:bg-red-50 transition" data-key="' + escapeHTML(s.__key) + '">作廢</button>'
+        +        : '<span class="text-slate-300 font-black">—</span>')
         +   '</td>'
         + '</tr>';
     }
@@ -704,20 +766,84 @@
     }
   }
 
-  function refreshKDSTimers() {
-    var els = document.querySelectorAll('.timer');
-    for (var i = 0; i < els.length; i++) {
-      var start = new Date(els[i].getAttribute('data-start'));
-      if (isNaN(start.getTime())) continue;
-      var diff = Math.floor((new Date() - start) / 1000);
-      var m = Math.floor(diff / 60);
-      var s = diff % 60;
-      els[i].textContent = padLeft(m, 2) + ':' + padLeft(s, 2);
+  function applyReportFilterFromUI() {
+    var sel = document.getElementById('shiftSelect');
+    var dtS = document.getElementById('dtStart');
+    var dtE = document.getElementById('dtEnd');
+
+    reportFilter.shiftId = sel ? (sel.value || '') : '';
+    reportFilter.start = parseLocalInputValue(dtS ? dtS.value : '');
+    reportFilter.end = parseLocalInputValue(dtE ? dtE.value : '');
+
+    renderReportUI();
+    showToast('報表已套用篩選');
+  }
+
+  function resetReportFilterUI() {
+    var now = new Date();
+
+    // 你要「能查歷史」，所以「全部班別」預設近 30 天
+    var start = new Date(now.getTime() - 30*24*60*60*1000);
+
+    reportFilter.shiftId = currentShiftId || '';
+    if (!reportFilter.shiftId) {
+      reportFilter.start = start;
+      reportFilter.end = now;
+    } else {
+      // 有班別：用班別時間
+      var s = getShiftById(reportFilter.shiftId);
+      var o = s && s.openedAt ? new Date(s.openedAt) : start;
+      var c = (s && s.closedAt) ? new Date(s.closedAt) : now;
+      reportFilter.start = o;
+      reportFilter.end = c;
     }
+
+    var sel = document.getElementById('shiftSelect');
+    if (sel) sel.value = reportFilter.shiftId;
+
+    document.getElementById('dtStart').value = toLocalInputValue(reportFilter.start);
+    document.getElementById('dtEnd').value = toLocalInputValue(reportFilter.end);
+
+    renderReportUI();
+    showToast('報表篩選已重置');
+  }
+
+  function wireShiftSelectAutoTime() {
+    var sel = document.getElementById('shiftSelect');
+    if (!sel) return;
+
+    sel.addEventListener('change', function(){
+      var id = this.value || '';
+      reportFilter.shiftId = id;
+
+      var now = new Date();
+      if (!id) {
+        // 全部班別：近 30 天
+        var start = new Date(now.getTime() - 30*24*60*60*1000);
+        document.getElementById('dtStart').value = toLocalInputValue(start);
+        document.getElementById('dtEnd').value = toLocalInputValue(now);
+        reportFilter.start = start;
+        reportFilter.end = now;
+      } else {
+        // 指定班別：自動套用該班別時間
+        var s = getShiftById(id);
+        var o = s && s.openedAt ? new Date(s.openedAt) : null;
+        var c = (s && s.closedAt) ? new Date(s.closedAt) : now;
+        if (o) {
+          document.getElementById('dtStart').value = toLocalInputValue(o);
+          document.getElementById('dtEnd').value = toLocalInputValue(c);
+          reportFilter.start = o;
+          reportFilter.end = c;
+        }
+      }
+
+      renderReportUI();
+      showToast('已套用班別時間');
+    });
   }
 
   /* -----------------------------
-     Admin actions
+     Admin
   ----------------------------- */
   function saveSettings() {
     var storeId = (document.getElementById('cfgStoreId').value || '').trim() || 'default';
@@ -824,10 +950,7 @@
       if (!snap.exists()) return;
 
       var order = snap.val() || {};
-      if ((order.status || 'OK') === 'VOID') {
-        showToast('此單已作廢');
-        return;
-      }
+      if ((order.status || 'OK') === 'VOID') { showToast('此單已作廢'); return; }
 
       var items = order.items || [];
       var cm = {};
@@ -840,21 +963,20 @@
       for (var mid in cm) if (cm.hasOwnProperty(mid)) promises.push(incStockTx(mid, cm[mid]));
       promises.push(ref.update({ status: 'VOID', voidedAt: new Date().toISOString() }));
 
-      // 移除 KDS（新寫法會用 orderId 做 key，舊資料不影響）
+      // 嘗試刪新舊 KDS（兩邊都刪一次，成功一邊就好）
       if (order.orderId) {
         promises.push(db.ref('kdsByOrderId/' + order.orderId).remove().catch(function(){}));
+        promises.push(db.ref('kds/' + order.orderId).remove().catch(function(){}));
       }
 
-      return Promise.all(promises).then(function(){
-        showToast('作廢完成（已回補庫存）');
-      });
+      return Promise.all(promises).then(function(){ showToast('作廢完成（已回補庫存）'); });
     }).catch(function(err){
       showToast('作廢失敗：' + (err && err.message ? err.message : err));
     });
   }
 
   /* -----------------------------
-     Checkout (Cloud Print) + Watchdog
+     Checkout (Cloud Print)
   ----------------------------- */
   function cleanupCheckout(btn, watchdogTimer) {
     if (watchdogTimer) clearTimeout(watchdogTimer);
@@ -868,11 +990,7 @@
     if (busyCheckout) return;
     if (cart.length === 0) return;
 
-    // 未開班禁止結帳
-    if (!currentShiftId) {
-      showToast('尚未開班，請先開班再結帳');
-      return;
-    }
+    if (!currentShiftId) { showToast('尚未開班，請先開班再結帳'); return; }
 
     busyCheckout = true;
     var btn = document.getElementById('checkoutBtn');
@@ -887,7 +1005,6 @@
       showToast('結帳逾時，已解除鎖定（請檢查網路/雲端）');
     }, 9000);
 
-    // count map by menuId
     var countMap = {};
     for (var i = 0; i < cart.length; i++) {
       var id = cart[i].menuId;
@@ -897,7 +1014,7 @@
     for (var k in countMap) if (countMap.hasOwnProperty(k)) menuIds.push(k);
 
     var now = new Date();
-    var oId = String(Date.now()); // 用長單號降低碰撞
+    var oId = String(Date.now());
     var total = 0;
     for (var t = 0; t < cart.length; t++) total += Number(cart[t].price || 0);
 
@@ -907,8 +1024,6 @@
     nextQueueNoTx(sid)
       .then(function(queueNo){
         qNo = queueNo;
-
-        // serial stock deductions
         var chain = Promise.resolve(true);
         for (var i2 = 0; i2 < menuIds.length; i2++) {
           (function(mid){
@@ -921,10 +1036,7 @@
         return chain;
       })
       .then(function(ok){
-        if (!ok) {
-          showToast('庫存不足，已取消結帳');
-          throw new Error('STOCK_NOT_ENOUGH');
-        }
+        if (!ok) { showToast('庫存不足，已取消結帳'); throw new Error('STOCK_NOT_ENOUGH'); }
 
         var oData = {
           date: now.toISOString(),
@@ -937,10 +1049,9 @@
           itemSummary: summarizeItems(cart)
         };
 
-        // sales: 用 push（保留歷史）
         return db.ref('sales').push(oData)
-          .then(function(res){
-            // KDS：用 orderId 做 key（作廢/完成更好處理）
+          .then(function(){
+            // 新版 KDS：kdsByOrderId
             return db.ref('kdsByOrderId/' + oId).set({
               queueNo: qNo,
               items: cart.slice(),
@@ -999,68 +1110,20 @@
   }
 
   /* -----------------------------
-     Report filter handlers
-  ----------------------------- */
-  function applyReportFilterFromUI() {
-    var sel = document.getElementById('shiftSelect');
-    var dtS = document.getElementById('dtStart');
-    var dtE = document.getElementById('dtEnd');
-
-    reportFilter.shiftId = sel ? (sel.value || '') : '';
-
-    var s = parseLocalInputValue(dtS ? dtS.value : '');
-    var e = parseLocalInputValue(dtE ? dtE.value : '');
-    reportFilter.start = s;
-    reportFilter.end = e;
-
-    renderReportUI();
-    showToast('報表已套用篩選');
-  }
-
-  function resetReportFilterUI() {
-    reportFilter.shiftId = '';
-    reportFilter.start = null;
-    reportFilter.end = null;
-
-    var sel = document.getElementById('shiftSelect');
-    if (sel) sel.value = currentShiftId || '';
-
-    // 預設：如果有班別，就用班別開始到現在；沒有就今天 00:00 到現在
-    var now = new Date();
-    var s = new Date();
-    s.setHours(0,0,0,0);
-    document.getElementById('dtStart').value = toLocalInputValue(s);
-    document.getElementById('dtEnd').value = toLocalInputValue(now);
-
-    reportFilter.start = s;
-    reportFilter.end = now;
-    reportFilter.shiftId = currentShiftId || '';
-
-    renderReportUI();
-    showToast('報表篩選已重置');
-  }
-
-  /* -----------------------------
      Init
   ----------------------------- */
   function init() {
-    // tabs
     var tabBtns = document.querySelectorAll('header nav button[data-tab]');
-    for (var i = 0; i < tabBtns.length; i++) {
-      tabBtns[i].addEventListener('click', function(){ changeTab(this.getAttribute('data-tab')); });
-    }
+    for (var i = 0; i < tabBtns.length; i++) tabBtns[i].addEventListener('click', function(){ changeTab(this.getAttribute('data-tab')); });
 
-    // sidebar buttons
     document.getElementById('openSidebarBtn').addEventListener('click', function(){ sidebarToggle(true); });
     document.getElementById('closeSidebarBtn').addEventListener('click', function(){ sidebarToggle(false); });
 
-    // actions
     document.getElementById('checkoutBtn').addEventListener('click', processCheckout);
     document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
     document.getElementById('addProductBtn').addEventListener('click', addProduct);
     document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
 
-    // shift actions (3 places)
     document.getElementById('openShiftBtn').addEventListener('click', openShift);
     document.getElementById('closeShiftBtn').addEventListener('click', closeShift);
     document.getElementById('openShiftAdminBtn').addEventListener('click', openShift);
@@ -1068,9 +1131,9 @@
     document.getElementById('openShiftMiniBtn').addEventListener('click', openShift);
     document.getElementById('closeShiftMiniBtn').addEventListener('click', closeShift);
 
-    // report filter buttons
     document.getElementById('applyReportFilterBtn').addEventListener('click', applyReportFilterFromUI);
     document.getElementById('resetReportFilterBtn').addEventListener('click', resetReportFilterUI);
+    wireShiftSelectAutoTime();
 
     // settings sync
     db.ref('settings').on('value', function(snap){
@@ -1093,27 +1156,15 @@
       currentShiftId = snap.val() || null;
       setShiftUI();
       listenShiftQueuePreview(currentShiftId);
-
-      // report 預設 shift
-      var sel = document.getElementById('shiftSelect');
-      if (sel && currentShiftId) sel.value = currentShiftId;
-
-      // 沒篩選時，預設填時間
-      // 若你已經手動改過，重置按鈕才會覆蓋
-      if (!document.getElementById('dtStart').value) {
-        var now = new Date();
-        var s = new Date(); s.setHours(0,0,0,0);
-        document.getElementById('dtStart').value = toLocalInputValue(s);
-        document.getElementById('dtEnd').value = toLocalInputValue(now);
-        reportFilter.start = s;
-        reportFilter.end = now;
-      }
     });
 
-    // shifts list sync (recent)
-    db.ref('shifts').limitToLast(100).on('value', function(snap){
+    // shifts list sync
+    db.ref('shifts').limitToLast(200).on('value', function(snap){
       shifts = snapToArrayWithKey(snap);
       renderShiftSelect();
+
+      // 第一次載入：自動設定報表篩選（避免你又說找不到歷史）
+      if (!reportFilter.start && !reportFilter.end) resetReportFilterUI();
     });
 
     // menu sync
@@ -1143,15 +1194,20 @@
       if (document.getElementById('reportTab').classList.contains('active')) renderReportUI();
     });
 
-    // kds sync (新的路徑)
+    // KDS sync: new path
     db.ref('kdsByOrderId').on('value', function(snap){
       var arr = snapToArrayWithKey(snap);
-      arr.sort(function(a,b){ return new Date(a.time) - new Date(b.time); });
-      kdsOrders = arr;
-      renderKDSUI();
+      kdsOrdersTempA = normalizeKdsList(arr, 'kdsByOrderId');
+      mergeKds();
     });
 
-    // clock/timers
+    // KDS sync: legacy path (解「完成不能按」& 歷史遷移期相容)
+    db.ref('kds').on('value', function(snap){
+      var arr = snapToArrayWithKey(snap);
+      kdsOrdersTempB = normalizeKdsList(arr, 'kds');
+      mergeKds();
+    });
+
     setInterval(function(){ document.getElementById('digitalClock').innerText = new Date().toLocaleTimeString(); }, 1000);
     setInterval(refreshKDSTimers, 1000);
 
