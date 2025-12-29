@@ -180,50 +180,72 @@
     }
 
     /* [11. 核心業務邏輯：結帳] */
-    function processCheckout() {
-        if(cart.length === 0) return;
-        const qNo = document.getElementById('nextQueueNo').innerText;
-        const now = new Date(); 
-        const oId = Date.now().toString().slice(-6); // 短單號
-        const total = cart.reduce((s,i)=>s+i.price,0);
+    /* --- [修正版：解決取單後卡死問題的結帳函式] --- */
+function processCheckout() {
+    if (cart.length === 0) return;
 
-        // 1. 更新雲端庫存 (逐一扣除)
-        cart.forEach(c => { 
-            const m = menu.find(mi => mi.name === c.name); 
-            if(m) { m.stock--; db.ref('menu').child(m.name).set(m); } 
+    const qNo = document.getElementById('nextQueueNo').innerText;
+    const now = new Date();
+    const oId = Date.now().toString().slice(-6); 
+    const total = cart.reduce((s, i) => s + i.price, 0);
+
+    // 1. 先執行雲端數據處理 (不等待列印)
+    try {
+        // 更新庫存
+        cart.forEach(c => {
+            const m = menu.find(mi => mi.name === c.name);
+            if (m) {
+                m.stock--;
+                db.ref('menu').child(m.name).set(m);
+            }
         });
-        
-        // 2. 推送至雲端銷貨報表與 KDS
+
+        // 推送至報表與 KDS
         const oData = { date: now.toISOString(), total, queueNo: qNo, orderId: oId, items: [...cart] };
         db.ref('sales').push(oData);
         db.ref('kds').child(oId).set({ queueNo: qNo, items: [...cart], time: now.toISOString(), orderId: oId });
 
-        // 3. 準備列印區域 (針對 57mm 紙張排版)
-        document.getElementById('printArea').innerHTML = `
-            <div class="print-page" style="text-align:center;">
-                <h2 style="margin:0;">${settings.storeName}</h2>
-                <h1 style="margin:2mm 0;">#${qNo}</h1>
-                <div style="font-size:9pt;">${now.toLocaleString()}</div>
-                <hr>
-                <div style="width:100%; text-align:left;">
-                    ${cart.map(i => `
-                        <div style="display:flex; justify-content:space-between; margin-bottom:1mm;">
-                            <span style="font-weight:bold;">${i.name}</span>
-                            <span>$${i.price}</span>
-                        </div>
-                    `).join('')}
-                </div>
-                <hr>
-                <div style="display:flex; justify-content:space-between; font-size:16pt; font-weight:bold;">
-                    <span>總計</span>
-                    <span>$${total}</span>
-                </div>
-                <div style="font-size:9pt; margin-top:4mm;">
-                    ${settings.phone}<br>${settings.note}<br>*** 謝謝惠顧 ***
-                </div>
-            </div>`;
-        
-        window.print();
+        // 2. 先重置介面，確保不卡死
+        const oldCart = [...cart]; // 備份起來給列印用
+        cart = []; 
+        renderCartUI(); 
+        sidebarToggle(false); 
+
+        // 3. 延遲跳出列印視窗 (給 iPad 緩衝時間)
+        setTimeout(() => {
+            document.getElementById('printArea').innerHTML = `
+                <div class="print-page">
+                    <h2 style="text-align:center; margin:0;">${settings.storeName}</h2>
+                    <h1 style="text-align:center; margin:2mm 0;">#${qNo}</h1>
+                    <div style="text-align:center; font-size:9pt;">${now.toLocaleString()}</div>
+                    <hr>
+                    <div style="width:100%;">
+                        ${oldCart.map(i => `
+                            <div style="display:flex; justify-content:space-between; margin-bottom:1mm;">
+                                <span style="font-weight:bold;">${i.name}</span>
+                                <span>$${i.price}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <hr>
+                    <div style="display:flex; justify-content:space-between; font-size:16pt; font-weight:bold;">
+                        <span>總計</span>
+                        <span>$${total}</span>
+                    </div>
+                    <div style="text-align:center; font-size:9pt; margin-top:4mm;">
+                        ${settings.phone}<br>${settings.note}<br>*** 謝謝惠顧 ***
+                    </div>
+                </div>`;
+            
+            window.print();
+            console.log("Print window closed, system ready.");
+        }, 300);
+
+    } catch (error) {
+        console.error("Checkout Error:", error);
+        alert("結帳發生錯誤，請檢查網路連線");
+    }
+}
         
         // 4. 重置購物車與收回側邊欄
         cart = []; 
