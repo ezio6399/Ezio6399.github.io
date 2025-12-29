@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>南屯任烤魚 - 雲端版 v17 (Universal Stable)</title>
+  <title>PRO POS - 雲端版 (Universal + Cloud Print)</title>
+
+  <!-- Polyfills: 讓舊 PC / 舊 Safari 不要裝死 -->
+  <script src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/core-js-bundle@3.38.1/minified.js"></script>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -19,6 +23,7 @@
     @media (min-width: 1024px) { #sidebar { position: relative; transform: translateX(0) !important; visibility: visible !important; } }
     @media (max-width: 1023px) { #sidebar { transform: translateX(100%); z-index: 200; } #sidebar.sidebar-active { transform: translateX(0); visibility: visible !important; } }
 
+    /* 保留 print CSS 但 POS 不再直接 window.print()，交給 Print Agent */
     @media print {
       body * { visibility: hidden !important; }
       #printArea, #printArea * { visibility: visible !important; color: black !important; }
@@ -49,6 +54,7 @@
 <main class="flex-1 flex overflow-hidden relative">
   <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-[150] hidden"></div>
 
+  <!-- 點餐 -->
   <div id="orderTab" class="tab-content active w-full">
     <div class="flex-1 p-6 overflow-y-auto">
       <div id="menuDisplay" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4"></div>
@@ -63,13 +69,18 @@
         </div>
         <button id="closeSidebarBtn" class="lg:hidden w-12 h-12 bg-white rounded-full shadow-sm border flex items-center justify-center font-bold text-slate-500 text-2xl">✕</button>
       </div>
+
       <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-3 bg-white"></div>
+
       <div class="p-6 bg-slate-50 border-t space-y-4 pb-12">
         <div class="flex justify-between items-center text-3xl font-black text-slate-800">
           <span class="text-base text-slate-400 uppercase font-bold tracking-wider">Total</span>
           <span>$<span id="totalPrice">0</span></span>
         </div>
         <button id="checkoutBtn" class="w-full bg-blue-600 text-white py-6 rounded-2xl text-2xl font-black shadow-lg shadow-blue-200 active:bg-blue-800 transition-all">確認結帳</button>
+        <div class="text-xs text-slate-400 font-bold">
+          列印模式：<span class="text-emerald-600">雲端列印</span>
+        </div>
       </div>
     </div>
 
@@ -79,10 +90,12 @@
     </button>
   </div>
 
+  <!-- 廚房 -->
   <div id="kdsTab" class="tab-content bg-slate-800 p-6 overflow-x-auto">
     <div id="kdsContainer" class="flex space-x-6 h-full items-start"></div>
   </div>
 
+  <!-- 報表 -->
   <div id="reportTab" class="tab-content bg-slate-100 p-8 overflow-y-auto flex-col">
     <div class="max-w-5xl mx-auto w-full space-y-6">
       <div class="grid grid-cols-3 gap-6 font-black text-center">
@@ -113,14 +126,20 @@
     </div>
   </div>
 
+  <!-- 設定 -->
   <div id="adminTab" class="tab-content bg-white p-8 overflow-y-auto flex-col">
     <div class="max-w-xl mx-auto w-full space-y-10">
+
       <section class="bg-slate-50 p-6 rounded-3xl border space-y-4">
-        <h2 class="text-2xl font-black text-blue-600 border-l-8 border-blue-600 pl-4">品牌與小票設定</h2>
+        <h2 class="text-2xl font-black text-blue-600 border-l-8 border-blue-600 pl-4">品牌與列印設定</h2>
+        <input type="text" id="cfgStoreId" placeholder="Store ID（列印代理用，例：nantun01）" class="w-full p-4 rounded-2xl border font-bold">
         <input type="text" id="cfgStoreName" placeholder="自定義店名" class="w-full p-4 rounded-2xl border font-bold">
         <input type="text" id="cfgPhone" placeholder="收據聯絡電話" class="w-full p-4 rounded-2xl border font-bold">
         <input type="text" id="cfgNote" placeholder="收據底部訊息 (如：謝謝惠顧)" class="w-full p-4 rounded-2xl border font-bold">
         <button id="saveSettingsBtn" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black active:scale-95 transition">儲存雲端設定</button>
+        <div class="text-xs text-slate-400 font-bold">
+          說明：Print Agent 要監聽同一個 Store ID。
+        </div>
       </section>
 
       <section class="bg-slate-50 p-6 rounded-3xl border space-y-4">
@@ -133,47 +152,28 @@
         <button id="addProductBtn" class="w-full bg-blue-600 text-white py-3 rounded-2xl font-black active:scale-95 transition">新增產品</button>
         <div id="menuListUI" class="space-y-2 mt-4"></div>
       </section>
+
     </div>
   </div>
 </main>
 
+<!-- 保留但 POS 端不直接 print -->
 <div id="printArea"></div>
 
 <script>
-  /* Firebase 初始化 */
-  var firebaseConfig = {
-    apiKey: "AIzaSyB4V2Zfzl_22tka2QHfkNSGaa23ke2TeWk",
-    authDomain: "flash-e1c46.firebaseapp.com",
-    projectId: "flash-e1c46",
-    storageBucket: "flash-e1c46.firebasestorage.app",
-    messagingSenderId: "927841326710",
-    appId: "1:927841326710:web:d832accdbf2a323ad1b157",
-    measurementId: "G-BVT622JRJT",
-    databaseURL: "https://flash-e1c46-default-rtdb.firebaseio.com/"
-  };
-
-  firebase.initializeApp(firebaseConfig);
-  var db = firebase.database();
-
-  /* 系統狀態 */
-  var settings = { storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
-  var menu = [];      // [{id,name,price,stock}]
-  var sales = [];     // [{... , __key}]
-  var kdsOrders = []; // [{... , __key}]
-  var cart = [];      // [{menuId,name,price}]
-  var busyCheckout = false;
-
-  /* Utility */
-  function todayKeyISO() {
-    return new Date().toISOString().split('T')[0];
+  /* -----------------------------
+     0) Utilities (ES5-safe)
+  ----------------------------- */
+  function padLeft(num, len) {
+    var s = String(num);
+    while (s.length < len) s = '0' + s;
+    return s;
   }
-  function fmtMoney(n) {
-    n = Number(n || 0);
-    return n.toLocaleString();
-  }
+
   function safeText(el, text) {
     el.textContent = String(text !== undefined && text !== null ? text : '');
   }
+
   function escapeHTML(str) {
     str = String(str !== undefined && str !== null ? str : '');
     return str
@@ -182,6 +182,15 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function todayKeyISO() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  function fmtMoney(n) {
+    n = Number(n || 0);
+    try { return n.toLocaleString(); } catch(e) { return String(n); }
   }
 
   function sidebarToggle(open) {
@@ -214,14 +223,62 @@
     return out;
   }
 
-  /* Transactions */
+  /* -----------------------------
+     1) Firebase init
+  ----------------------------- */
+  var firebaseConfig = {
+    apiKey: "AIzaSyB4V2Zfzl_22tka2QHfkNSGaa23ke2TeWk",
+    authDomain: "flash-e1c46.firebaseapp.com",
+    projectId: "flash-e1c46",
+    storageBucket: "flash-e1c46.firebasestorage.app",
+    messagingSenderId: "927841326710",
+    appId: "1:927841326710:web:d832accdbf2a323ad1b157",
+    measurementId: "G-BVT622JRJT",
+    databaseURL: "https://flash-e1c46-default-rtdb.firebaseio.com/"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.database();
+
+  /* -----------------------------
+     2) State
+  ----------------------------- */
+  var settings = { storeId: 'default', storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
+  var menu = [];      // [{id,name,price,stock}]
+  var sales = [];     // [{... , __key}]
+  var kdsOrders = []; // [{... , __key}]
+  var cart = [];      // [{menuId,name,price}]
+  var busyCheckout = false;
+
+  /* -----------------------------
+     3) Cloud print queue
+  ----------------------------- */
+  function enqueuePrintJob(payload) {
+    payload = payload || {};
+    var storeId = (settings && settings.storeId) ? settings.storeId : 'default';
+    var createdAt = new Date().toISOString();
+    var ref = db.ref('printJobs/' + storeId).push();
+    return ref.set({
+      status: 'NEW',
+      createdAt: createdAt,
+      type: payload.type || 'receipt',
+      html: payload.html || '',
+      meta: payload.meta || {}
+    }).then(function() {
+      return ref.key;
+    });
+  }
+
+  /* -----------------------------
+     4) Transactions (Queue & Stock)
+  ----------------------------- */
   function nextQueueNoTx(dateKey) {
     var ref = db.ref('dailyCounters/' + dateKey + '/queue');
     return ref.transaction(function(cur) {
       return (cur || 0) + 1;
     }).then(function(res) {
       if (!res.committed) throw new Error('Queue transaction failed');
-      return String(res.snapshot.val()).padStart(3, '0');
+      return padLeft(res.snapshot.val(), 3);
     });
   }
 
@@ -229,8 +286,8 @@
     qty = qty || 1;
     var ref = db.ref('menu/' + menuId + '/stock');
     return ref.transaction(function(cur) {
-      if (cur === null) return;         // cancel
-      if (cur < qty) return;            // cancel
+      if (cur === null) return;      // cancel
+      if (cur < qty) return;         // cancel
       return cur - qty;
     }).then(function(res) {
       return !!res.committed;
@@ -248,7 +305,9 @@
     });
   }
 
-  /* UI render */
+  /* -----------------------------
+     5) Render UI
+  ----------------------------- */
   function renderMenu() {
     var wrap = document.getElementById('menuDisplay');
     var html = '';
@@ -349,6 +408,7 @@
           itemsHtml += '<div class="border-b pb-2">□ ' + escapeHTML(o.items[k].name) + '</div>';
         }
       }
+
       html += ''
         + '<div class="w-80 bg-white rounded-[2.5rem] shadow-2xl flex-shrink-0 flex flex-col border-4 border-blue-500 overflow-hidden h-fit">'
         +   '<div class="bg-blue-600 text-white p-5 flex justify-between items-center">'
@@ -381,9 +441,7 @@
       if (d === today) filtered.push(sales[i]);
     }
 
-    filtered.sort(function(a, b) {
-      return new Date(b.date) - new Date(a.date);
-    });
+    filtered.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
 
     var revenue = 0;
     for (var r = 0; r < filtered.length; r++) revenue += Number(filtered[r].total || 0);
@@ -395,10 +453,15 @@
     var html = '';
     for (var j = 0; j < filtered.length; j++) {
       var s = filtered[j];
-      var time = new Date(s.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      var timeText = '';
+      try {
+        timeText = new Date(s.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch(e) {
+        timeText = new Date(s.date).toLocaleTimeString();
+      }
       html += ''
         + '<tr>'
-        +   '<td class="p-6 text-blue-600 font-black">' + escapeHTML(time) + '</td>'
+        +   '<td class="p-6 text-blue-600 font-black">' + escapeHTML(timeText) + '</td>'
         +   '<td class="p-6 text-center text-2xl font-black">#' + escapeHTML(s.queueNo) + '</td>'
         +   '<td class="p-6 text-right font-black text-2xl">$' + fmtMoney(s.total) + '</td>'
         +   '<td class="p-6 text-center"><button class="void-btn text-red-500 font-black border-2 border-red-50 px-4 py-1 rounded-xl active:bg-red-50 transition" data-orderid="' + escapeHTML(s.orderId) + '">作廢</button></td>'
@@ -422,180 +485,26 @@
       var diff = Math.floor((new Date() - start) / 1000);
       var m = Math.floor(diff / 60);
       var s = diff % 60;
-      var mm = String(m).padStart(2, '0');
-      var ss = String(s).padStart(2, '0');
-      els[i].textContent = mm + ':' + ss;
+      els[i].textContent = padLeft(m, 2) + ':' + padLeft(s, 2);
     }
   }
 
   function updateQueueDisplayFromCounter(counterVal) {
     var next = Number(counterVal || 0) + 1;
-    document.getElementById('nextQueueNo').innerText = String(next).padStart(3, '0');
+    document.getElementById('nextQueueNo').innerText = padLeft(next, 3);
   }
 
-  /* 結帳（Promise chain 版本，跨裝置穩） */
-  function processCheckout() {
-    if (busyCheckout) return;
-    if (cart.length === 0) return;
-
-    busyCheckout = true;
-    var checkoutBtn = document.getElementById('checkoutBtn');
-    checkoutBtn.disabled = true;
-    checkoutBtn.classList.add('opacity-60');
-
-    var dateKey = todayKeyISO();
-
-    // 統計每個 menuId 的數量（不用 Object.entries）
-    var countMap = {}; // {menuId: qty}
-    for (var i = 0; i < cart.length; i++) {
-      var id = cart[i].menuId;
-      countMap[id] = (countMap[id] || 0) + 1;
-    }
-
-    var menuIds = [];
-    for (var k in countMap) if (countMap.hasOwnProperty(k)) menuIds.push(k);
-
-    var qNo = null;
-
-    nextQueueNoTx(dateKey)
-      .then(function(queueNo) {
-        qNo = queueNo;
-
-        // 逐項扣庫存（串行，穩但慢一點，反正 POS 不需要每秒 1000 單）
-        var chain = Promise.resolve(true);
-        for (var i2 = 0; i2 < menuIds.length; i2++) {
-          (function(mid) {
-            chain = chain.then(function(ok) {
-              if (!ok) return false;
-              return decStockTx(mid, countMap[mid]);
-            });
-          })(menuIds[i2]);
-        }
-        return chain;
-      })
-      .then(function(ok) {
-        if (!ok) {
-          alert('庫存不足或商品不存在，已取消本次結帳。');
-          throw new Error('STOCK_NOT_ENOUGH');
-        }
-
-        var now = new Date();
-        var oId = String(Date.now()).slice(-6);
-        var total = 0;
-        for (var i3 = 0; i3 < cart.length; i3++) total += Number(cart[i3].price || 0);
-
-        var oData = {
-          date: now.toISOString(),
-          total: total,
-          queueNo: qNo,
-          orderId: oId,
-          items: cart.slice()
-        };
-
-        // sales / kds 用 push（避免 key 亂掉）
-        return db.ref('sales').push(oData).then(function() {
-          return db.ref('kds').push({ queueNo: qNo, items: cart.slice(), time: now.toISOString(), orderId: oId });
-        }).then(function() {
-          // print
-          var printHtml = ''
-            + '<div class="print-page" style="text-align:center;">'
-            +   '<h2 style="margin:0;">' + escapeHTML(settings.storeName) + '</h2>'
-            +   '<h1 style="margin:2mm 0;">#' + escapeHTML(qNo) + '</h1>'
-            +   '<div style="font-size:9pt;">' + escapeHTML(now.toLocaleString()) + '</div>'
-            +   '<hr>'
-            +   '<div style="width:100%; text-align:left;">';
-
-          for (var i4 = 0; i4 < cart.length; i4++) {
-            printHtml += ''
-              + '<div style="display:flex; justify-content:space-between; margin-bottom:1mm;">'
-              +   '<span style="font-weight:bold;">' + escapeHTML(cart[i4].name) + '</span>'
-              +   '<span>$' + escapeHTML(cart[i4].price) + '</span>'
-              + '</div>';
-          }
-
-          printHtml += ''
-            +   '</div>'
-            +   '<hr>'
-            +   '<div style="display:flex; justify-content:space-between; font-size:16pt; font-weight:bold;">'
-            +     '<span>總計</span>'
-            +     '<span>$' + escapeHTML(total) + '</span>'
-            +   '</div>'
-            +   '<div style="font-size:9pt; margin-top:4mm;">'
-            +     escapeHTML(settings.phone) + '<br>'
-            +     escapeHTML(settings.note || '') + '<br>'
-            +     '*** 謝謝惠顧 ***'
-            +   '</div>'
-            + '</div>';
-
-          document.getElementById('printArea').innerHTML = printHtml;
-          window.print();
-
-          // clear cart
-          cart = [];
-          renderCartUI();
-          sidebarToggle(false);
-          alert('結帳完成！取單號為：' + qNo);
-        });
-      })
-      .catch(function(err) {
-        if (err && err.message === 'STOCK_NOT_ENOUGH') {
-          // already alerted
-        } else {
-          console.error(err);
-          alert('結帳失敗：' + (err && err.message ? err.message : err));
-        }
-      })
-      .finally(function() {
-        busyCheckout = false;
-        checkoutBtn.disabled = false;
-        checkoutBtn.classList.remove('opacity-60');
-      });
-  }
-
-  /* 作廢：回補庫存 + 刪 sales */
-  function voidOrder(oId) {
-    if (!oId) return;
-    if (!confirm('確認作廢此訂單？庫存將回補雲端。')) return;
-
-    db.ref('sales').orderByChild('orderId').equalTo(oId).once('value')
-      .then(function(snap) {
-        if (!snap.exists()) return;
-
-        var promises = [];
-        snap.forEach(function(child) {
-          var order = child.val() || {};
-          var items = order.items || [];
-
-          // 統計回補
-          var cm = {};
-          for (var i = 0; i < items.length; i++) {
-            if (!items[i].menuId) continue;
-            cm[items[i].menuId] = (cm[items[i].menuId] || 0) + 1;
-          }
-
-          for (var mid in cm) {
-            if (cm.hasOwnProperty(mid)) promises.push(incStockTx(mid, cm[mid]));
-          }
-
-          promises.push(child.ref.remove());
-        });
-
-        return Promise.all(promises);
-      })
-      .catch(function(err) {
-        console.error(err);
-        alert('作廢失敗：' + (err && err.message ? err.message : err));
-      });
-  }
-
-  /* Admin */
+  /* -----------------------------
+     6) Admin actions
+  ----------------------------- */
   function saveSettings() {
+    var storeId = (document.getElementById('cfgStoreId').value || '').trim() || 'default';
     var storeName = (document.getElementById('cfgStoreName').value || '').trim() || 'PRO POS';
     var phone = (document.getElementById('cfgPhone').value || '').trim();
     var note = (document.getElementById('cfgNote').value || '').trim();
 
-    db.ref('settings').set({ storeName: storeName, phone: phone, note: note })
-      .then(function() { alert('雲端品牌資訊已同步'); })
+    db.ref('settings').set({ storeId: storeId, storeName: storeName, phone: phone, note: note })
+      .then(function() { alert('雲端設定已同步'); })
       .catch(function(err) { alert('儲存失敗：' + (err && err.message ? err.message : err)); });
   }
 
@@ -608,7 +517,7 @@
     if (!name || !isFinite(price) || price <= 0) return;
 
     var ref = db.ref('menu').push();
-    ref.set({ id: ref.key, name: name, price: price, stock: stock })
+    ref.set({ id: ref.key, name: name, price: price, stock: Math.floor(stock) })
       .then(function() {
         document.getElementById('newProdName').value = '';
         document.getElementById('newProdPrice').value = '';
@@ -685,7 +594,177 @@
     XLSX.writeFile(wb, (settings.storeName || 'POS') + "_報表.xlsx");
   }
 
-  /* Init */
+  /* -----------------------------
+     7) Void order (restock + delete)
+  ----------------------------- */
+  function voidOrder(oId) {
+    if (!oId) return;
+    if (!confirm('確認作廢此訂單？庫存將回補雲端。')) return;
+
+    db.ref('sales').orderByChild('orderId').equalTo(oId).once('value')
+      .then(function(snap) {
+        if (!snap.exists()) return;
+
+        var promises = [];
+        snap.forEach(function(child) {
+          var order = child.val() || {};
+          var items = order.items || [];
+
+          // count per menuId
+          var cm = {};
+          for (var i = 0; i < items.length; i++) {
+            if (!items[i].menuId) continue;
+            cm[items[i].menuId] = (cm[items[i].menuId] || 0) + 1;
+          }
+
+          for (var mid in cm) {
+            if (cm.hasOwnProperty(mid)) promises.push(incStockTx(mid, cm[mid]));
+          }
+
+          promises.push(child.ref.remove());
+        });
+
+        return Promise.all(promises);
+      })
+      .catch(function(err) {
+        alert('作廢失敗：' + (err && err.message ? err.message : err));
+      });
+  }
+
+  /* -----------------------------
+     8) Checkout (cloud print)
+  ----------------------------- */
+  function cleanupCheckout(checkoutBtn) {
+    busyCheckout = false;
+    checkoutBtn.disabled = false;
+    checkoutBtn.classList.remove('opacity-60');
+  }
+
+  function processCheckout() {
+    if (busyCheckout) return;
+    if (cart.length === 0) return;
+
+    busyCheckout = true;
+    var checkoutBtn = document.getElementById('checkoutBtn');
+    checkoutBtn.disabled = true;
+    checkoutBtn.classList.add('opacity-60');
+
+    var dateKey = todayKeyISO();
+
+    // count map by menuId
+    var countMap = {};
+    for (var i = 0; i < cart.length; i++) {
+      var id = cart[i].menuId;
+      countMap[id] = (countMap[id] || 0) + 1;
+    }
+
+    var menuIds = [];
+    for (var k in countMap) if (countMap.hasOwnProperty(k)) menuIds.push(k);
+
+    var qNo = null;
+    var now = new Date();
+    var oId = String(Date.now()).slice(-6);
+    var total = 0;
+    for (var t = 0; t < cart.length; t++) total += Number(cart[t].price || 0);
+
+    nextQueueNoTx(dateKey)
+      .then(function(queueNo) {
+        qNo = queueNo;
+
+        // serial stock deductions
+        var chain = Promise.resolve(true);
+        for (var i2 = 0; i2 < menuIds.length; i2++) {
+          (function(mid) {
+            chain = chain.then(function(ok) {
+              if (!ok) return false;
+              return decStockTx(mid, countMap[mid]);
+            });
+          })(menuIds[i2]);
+        }
+        return chain;
+      })
+      .then(function(ok) {
+        if (!ok) {
+          alert('庫存不足或商品不存在，已取消本次結帳。');
+          throw new Error('STOCK_NOT_ENOUGH');
+        }
+
+        var oData = {
+          date: now.toISOString(),
+          total: total,
+          queueNo: qNo,
+          orderId: oId,
+          items: cart.slice()
+        };
+
+        // write sales & kds
+        return db.ref('sales').push(oData).then(function() {
+          return db.ref('kds').push({ queueNo: qNo, items: cart.slice(), time: now.toISOString(), orderId: oId });
+        }).then(function() {
+          // build receipt html (for print agent)
+          var printHtml = ''
+            + '<div class="print-page" style="text-align:center;">'
+            +   '<h2 style="margin:0;">' + escapeHTML(settings.storeName) + '</h2>'
+            +   '<h1 style="margin:2mm 0;">#' + escapeHTML(qNo) + '</h1>'
+            +   '<div style="font-size:9pt;">' + escapeHTML(now.toLocaleString()) + '</div>'
+            +   '<hr>'
+            +   '<div style="width:100%; text-align:left;">';
+
+          for (var i4 = 0; i4 < cart.length; i4++) {
+            printHtml += ''
+              + '<div style="display:flex; justify-content:space-between; margin-bottom:1mm;">'
+              +   '<span style="font-weight:bold;">' + escapeHTML(cart[i4].name) + '</span>'
+              +   '<span>$' + escapeHTML(cart[i4].price) + '</span>'
+              + '</div>';
+          }
+
+          printHtml += ''
+            +   '</div>'
+            +   '<hr>'
+            +   '<div style="display:flex; justify-content:space-between; font-size:16pt; font-weight:bold;">'
+            +     '<span>總計</span>'
+            +     '<span>$' + escapeHTML(total) + '</span>'
+            +   '</div>'
+            +   '<div style="font-size:9pt; margin-top:4mm;">'
+            +     escapeHTML(settings.phone) + '<br>'
+            +     escapeHTML(settings.note || '') + '<br>'
+            +     '*** 謝謝惠顧 ***'
+            +   '</div>'
+            + '</div>';
+
+          // enqueue cloud print job
+          return enqueuePrintJob({
+            type: 'receipt',
+            html: printHtml,
+            meta: { queueNo: qNo, orderId: oId, total: total }
+          });
+        }).then(function() {
+          // clear cart
+          cart = [];
+          renderCartUI();
+          sidebarToggle(false);
+
+          setTimeout(function() {
+            alert('結帳完成！取單號為：' + qNo + '（列印已送出雲端）');
+          }, 200);
+        });
+      })
+      .then(function() {
+        cleanupCheckout(checkoutBtn);
+      })
+      .catch(function(err) {
+        if (err && err.message === 'STOCK_NOT_ENOUGH') {
+          // already alerted
+        } else {
+          alert('結帳失敗：' + (err && err.message ? err.message : err));
+        }
+        cleanupCheckout(checkoutBtn);
+      });
+  }
+
+  /* -----------------------------
+     9) Init & listeners
+  ----------------------------- */
   function init() {
     // tab buttons
     var tabBtns = document.querySelectorAll('header nav button[data-tab]');
@@ -698,7 +777,7 @@
     document.getElementById('openSidebarBtn').addEventListener('click', function() { sidebarToggle(true); });
     document.getElementById('closeSidebarBtn').addEventListener('click', function() { sidebarToggle(false); });
 
-    // main actions
+    // actions
     document.getElementById('checkoutBtn').addEventListener('click', processCheckout);
     document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
     document.getElementById('addProductBtn').addEventListener('click', addProduct);
@@ -708,7 +787,16 @@
     db.ref('settings').on('value', function(snap) {
       if (!snap.exists()) return;
       settings = snap.val() || settings;
-      safeText(document.getElementById('displayStoreName'), settings.storeName || 'PRO POS');
+
+      // defaults
+      if (!settings.storeId) settings.storeId = 'default';
+      if (!settings.storeName) settings.storeName = 'PRO POS';
+      if (!settings.phone) settings.phone = '';
+      if (!settings.note) settings.note = '';
+
+      safeText(document.getElementById('displayStoreName'), settings.storeName);
+
+      document.getElementById('cfgStoreId').value = settings.storeId || 'default';
       document.getElementById('cfgStoreName').value = settings.storeName || '';
       document.getElementById('cfgPhone').value = settings.phone || '';
       document.getElementById('cfgNote').value = settings.note || '';
@@ -727,7 +815,6 @@
           stock: Number(x.stock || 0)
         });
       }
-      // sort by name
       out.sort(function(a, b) { return (a.name || '').localeCompare((b.name || ''), 'zh-Hant'); });
       menu = out;
       renderMenu();
@@ -750,7 +837,7 @@
       renderKDSUI();
     });
 
-    // queue preview (display only)
+    // queue preview
     var dateKey = todayKeyISO();
     db.ref('dailyCounters/' + dateKey + '/queue').on('value', function(snap) {
       updateQueueDisplayFromCounter(snap.val() || 0);
@@ -768,5 +855,6 @@
 
   init();
 </script>
+
 </body>
 </html>
