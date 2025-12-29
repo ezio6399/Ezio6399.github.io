@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PRO POS - Cloud Print Agent</title>
+
+  <!-- Polyfills：避免某些舊環境直接爆炸 -->
+  <script src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/core-js-bundle@3.38.1/minified.js"></script>
+
+  <!-- Firebase v8 -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; padding: 16px; background:#0b1220; color:#e5e7eb; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .card { background:#111827; border:1px solid #1f2937; padding:14px; border-radius:14px; }
+    .log { margin-top:12px; border:1px solid #1f2937; padding:12px; border-radius:12px; height: 60vh; overflow:auto; background:#0f172a; }
+    .badge { padding:4px 10px; border-radius:999px; color:#fff; font-size:12px; font-weight:900; }
+    .ok { background:#16a34a; } .warn { background:#f59e0b; } .err { background:#dc2626; }
+    button { padding:10px 14px; border-radius:10px; border:1px solid #334155; background:#0b1220; color:#e5e7eb; cursor:pointer; font-weight:900; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    input { padding:10px 12px; border-radius:10px; border:1px solid #334155; background:#0b1220; color:#e5e7eb; font-weight:800; }
+    iframe { display:none; }
+    .hint { color:#94a3b8; font-size:12px; font-weight:700; }
+    .tiny { font-size: 12px; color:#94a3b8; font-weight: 700; }
+    .pill { display:inline-block; padding:2px 10px; border-radius:999px; border:1px solid #334155; }
+    .danger { color:#fecaca; }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h2 style="margin:0 0 8px 0;">雲端列印代理（Print Agent）</h2>
+
+    <div class="row" style="margin-bottom:10px;">
+      <span class="badge warn" id="status">待命</span>
+
+      <label style="font-weight:800;">Store ID：</label>
+      <input id="storeId" value="default" />
+
+      <button id="startBtn">開始監聽</button>
+      <button id="stopBtn" disabled>停止</button>
+
+      <button id="testBtn">送出測試任務</button>
+      <button id="clearLogBtn">清空 Log</button>
+    </div>
+
+    <div class="hint">
+      這頁請在「接了熱感印表機」的店內 PC 上開著。請先設定預設印表機與紙張（57/58mm 或 80mm）。
+      <span class="pill">建議 Chrome</span>
+      <span class="pill danger">瀏覽器列印通常會跳對話框（正常）</span>
+    </div>
+  </div>
+
+  <div class="log" id="log"></div>
+  <iframe id="printFrame" title="print-frame"></iframe>
+
+<script>
+  /* =========================
+     1) Firebase config
+     ========================= */
+  var firebaseConfig = {
+    apiKey: "AIzaSyB4V2Zfzl_22tka2QHfkNSGaa23ke2TeWk",
+    authDomain: "flash-e1c46.firebaseapp.com",
+    projectId: "flash-e1c46",
+    storageBucket: "flash-e1c46.firebasestorage.app",
+    messagingSenderId: "927841326710",
+    appId: "1:927841326710:web:d832accdbf2a323ad1b157",
+    measurementId: "G-BVT622JRJT",
+    databaseURL: "https://flash-e1c46-default-rtdb.firebaseio.com/"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.database();
+
+  /* =========================
+     2) State
+     ========================= */
+  var listeningRef = null;
+  var isPrinting = false;
+  var activeStoreId = null;
+
+  /* =========================
+     3) Utils
+     ========================= */
+  function nowStr() {
+    try { return new Date().toLocaleTimeString(); }
+    catch(e) { return String(new Date()); }
+  }
+
+  function log(msg) {
+    var el = document.getElementById('log');
+    var line = document.createElement('div');
+    line.textContent = '[' + nowStr() + '] ' + msg;
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function setStatus(text, cls) {
+    var s = document.getElementById('status');
+    s.textContent = text;
+    s.className = 'badge ' + cls;
+  }
+
+  function escapeHTML(str) {
+    str = String(str === undefined || str === null ? '' : str);
+    return str
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#039;');
+  }
+
+  /* =========================
+     4) Print helper
+     - 將 receipt HTML 丟到 iframe，然後呼叫 iframe.print()
+     ========================= */
+  function printHTML(html) {
+    return new Promise(function(resolve, reject) {
+      try {
+        var iframe = document.getElementById('printFrame');
+        var doc = iframe.contentWindow.document;
+
+        doc.open();
+        doc.write(
+          '<!doctype html><html><head><meta charset="utf-8">' +
+          '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+          '<style>' +
+          '  @media print{' +
+          '    body{margin:0;padding:0;}' +
+          '    .print-page{width:52mm;font-family:monospace;font-size:12pt;line-height:1.2;padding:2mm;}' +
+          '    h1{font-size:24pt;margin:2mm 0;font-weight:900;}' +
+          '    h2{font-size:16pt;margin:0;font-weight:bold;}' +
+          '    hr{border:none;border-top:1px dashed #000;margin:2mm 0;}' +
+          '  }' +
+          '</style>' +
+          '</head><body>' + (html || '') + '</body></html>'
+        );
+        doc.close();
+
+        // 讓 DOM settle 一下（某些環境太急會印空白）
+        setTimeout(function() {
+          try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            resolve(true);
+          } catch (e2) {
+            reject(e2);
+          }
+        }, 180);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  /* =========================
+     5) Job processing
+     - 接到 NEW → 標記 PRINTING → 列印 → DONE / ERROR
+     ========================= */
+  function processJob(jobKey, jobVal, storeId) {
+    // 避免同時多份列印（你也不想收據像機槍一樣噴）
+    if (isPrinting) return;
+    if (!jobVal || jobVal.status !== 'NEW') return;
+
+    isPrinting = true;
+    setStatus('列印中', 'warn');
+    log('收到任務：' + jobKey + ' type=' + (jobVal.type || 'receipt'));
+
+    var jobRef = db.ref('printJobs/' + storeId + '/' + jobKey);
+
+    jobRef.update({ status: 'PRINTING', printingAt: new Date().toISOString() })
+      .then(function(){
+        // 防呆：避免把非字串塞進去
+        var html = (typeof jobVal.html === 'string') ? jobVal.html : '';
+        return printHTML(html);
+      })
+      .then(function(){
+        log('列印完成：' + jobKey);
+        return jobRef.update({ status: 'DONE', doneAt: new Date().toISOString() });
+      })
+      .then(function(){
+        isPrinting = false;
+        setStatus('監聽中', 'ok');
+      })
+      .catch(function(err){
+        var msg = (err && err.message) ? err.message : String(err);
+        log('列印失敗：' + jobKey + ' err=' + msg);
+
+        jobRef.update({
+          status: 'ERROR',
+          errorAt: new Date().toISOString(),
+          errorMsg: msg
+        }).then(function(){
+          isPrinting = false;
+          setStatus('監聽中', 'ok');
+        });
+      });
+  }
+
+  /* =========================
+     6) Listening control
+     ========================= */
+  function normalizeStoreId(v) {
+    v = (v || '').trim();
+    return v ? v : 'default';
+  }
+
+  function startListening() {
+    var storeId = normalizeStoreId(document.getElementById('storeId').value);
+
+    // 如果之前有監聽，先關掉
+    if (listeningRef) {
+      try { listeningRef.off(); } catch(e) {}
+      listeningRef = null;
+    }
+
+    activeStoreId = storeId;
+    listeningRef = db.ref('printJobs/' + storeId);
+
+    setStatus('監聽中', 'ok');
+    log('開始監聽：printJobs/' + storeId);
+
+    // child_added：新工作
+    listeningRef.on('child_added', function(snap){
+      processJob(snap.key, snap.val(), storeId);
+    });
+
+    // child_changed：如果有人把 status 改回 NEW，也能再處理
+    listeningRef.on('child_changed', function(snap){
+      processJob(snap.key, snap.val(), storeId);
+    });
+
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('stopBtn').disabled = false;
+  }
+
+  function stopListening() {
+    if (listeningRef) {
+      try { listeningRef.off(); } catch(e) {}
+    }
+    listeningRef = null;
+    activeStoreId = null;
+    isPrinting = false;
+
+    setStatus('已停止', 'err');
+    log('停止監聽');
+
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('stopBtn').disabled = true;
+  }
+
+  /* =========================
+     7) Test job
+     ========================= */
+  function sendTestJob() {
+    var storeId = normalizeStoreId(document.getElementById('storeId').value);
+
+    var html =
+      '<div class="print-page" style="text-align:center;">' +
+        '<h2 style="margin:0;">測試列印</h2>' +
+        '<h1 style="margin:2mm 0;">#TEST</h1>' +
+        '<div style="font-size:9pt;">' + escapeHTML(new Date().toLocaleString()) + '</div>' +
+        '<hr>' +
+        '<div style="text-align:left;">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:1mm;"><span style="font-weight:bold;">測試品項</span><span>$10</span></div>' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:1mm;"><span style="font-weight:bold;">第二項</span><span>$20</span></div>' +
+        '</div>' +
+        '<hr>' +
+        '<div style="display:flex; justify-content:space-between; font-size:16pt; font-weight:bold;"><span>總計</span><span>$30</span></div>' +
+        '<div style="font-size:9pt; margin-top:4mm;">*** 測試完成 ***</div>' +
+      '</div>';
+
+    db.ref('printJobs/' + storeId).push({
+      status: 'NEW',
+      createdAt: new Date().toISOString(),
+      type: 'test',
+      html: html,
+      meta: { test: true }
+    }).then(function(){
+      log('已送出測試任務（Store ID: ' + storeId + '）');
+    }).catch(function(err){
+      log('送出測試任務失敗：' + ((err && err.message) ? err.message : String(err)));
+    });
+  }
+
+  /* =========================
+     8) Bind events
+     ========================= */
+  document.getElementById('startBtn').addEventListener('click', startListening);
+  document.getElementById('stopBtn').addEventListener('click', stopListening);
+  document.getElementById('testBtn').addEventListener('click', sendTestJob);
+  document.getElementById('clearLogBtn').addEventListener('click', function(){
+    document.getElementById('log').innerHTML = '';
+  });
+
+  // 小提醒：避免你忘了
+  log('提醒：POS 設定頁的 Store ID 必須跟這裡一致，否則永遠收不到列印任務。');
+  log('提示：如果你想「不跳列印視窗」，要用 Chrome kiosk-printing（屬於系統層設定，不是這支 HTML 能魔法做到）。');
+</script>
+</body>
+</html>
