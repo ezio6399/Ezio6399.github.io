@@ -2,133 +2,175 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>南屯任烤魚 - iPad 旗艦 POS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>南屯任烤魚 - iPad 穩定版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        /* --- [1. iPad 觸控優化 CSS 開始] --- */
-        :root { --header-h: 64px; }
-        
+        /* --- [1. iPad 全方位修正 CSS] --- */
         body { 
-            font-family: -apple-system, sans-serif; 
-            touch-action: manipulation; /* 移除點擊延遲 */
-            -webkit-overflow-scrolling: touch; /* 流暢滾動 */
-            overflow: hidden; /* 防止視窗晃動 */
+            font-family: -apple-system, system-ui, sans-serif; 
+            touch-action: manipulation;
+            -webkit-overflow-scrolling: touch;
+            overflow: hidden;
+            background-color: #f8fafc;
         }
 
-        /* 側邊欄：徹底隔離空間，不遮擋下方 */
+        /* 側邊欄修正：確保按鈕與清單始終存在於 DOM 且正確定位 */
         #sidebar {
             position: fixed;
             top: 0;
             right: 0;
-            height: 100%;
-            width: 380px;
+            bottom: 0;
+            width: 380px; /* iPad 建議寬度 */
             background: white;
-            z-index: 200;
-            transform: translateX(100%);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            visibility: hidden; /* 關閉時徹底隱藏 */
+            z-index: 100;
             display: flex;
             flex-direction: column;
-        }
-        #sidebar.sidebar-active {
-            transform: translateX(0);
-            visibility: visible;
-        }
-
-        /* 遮罩層：開啟側欄時才出現 */
-        #sidebarOverlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 150;
-            display: none;
+            border-left: 1px solid #e2e8f0;
+            transition: transform 0.3s ease-in-out;
+            box-shadow: -4px 0 15px rgba(0,0,0,0.05);
         }
 
-        .tab-content { display: none; height: calc(100vh - var(--header-h)); }
+        /* 在 iPad 橫向或電腦螢幕，側欄應預設開啟 */
+        @media (min-width: 1024px) {
+            #sidebar {
+                position: relative;
+                transform: translateX(0) !important;
+                visibility: visible !important;
+            }
+            #main-container { margin-right: 0; } /* 佈局適配 */
+        }
+
+        /* 在 iPad 縱向或手機，側欄預設收起 */
+        @media (max-width: 1023px) {
+            #sidebar {
+                transform: translateX(100%);
+                z-index: 200;
+            }
+            #sidebar.sidebar-active {
+                transform: translateX(0);
+                visibility: visible !important;
+            }
+        }
+
+        .tab-content { display: none; height: calc(100vh - 64px); width: 100%; }
         .tab-content.active { display: flex; }
 
-        /* 針對 iPad 最佳化的大按鈕與捲軸 */
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        /* 修正點擊反饋 */
+        .btn-active:active { transform: scale(0.96); opacity: 0.8; }
         
-        .action-btn { -webkit-appearance: none; border-radius: 1rem; }
-        /* --- [1. iPad 觸控優化 CSS 結束] --- */
+        /* 列印區域 */
+        @media print {
+            body * { visibility: hidden !important; }
+            #printArea, #printArea * { visibility: visible !important; }
+            #printArea { position: absolute; left: 0; top: 0; width: 57mm; }
+        }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-800">
+<body class="h-screen flex flex-col">
 
-<header class="bg-slate-900 text-white h-[64px] flex items-center justify-between px-6 no-print flex-shrink-0 shadow-lg relative z-[300]">
+<header class="bg-slate-900 text-white h-16 flex items-center justify-between px-6 flex-shrink-0 z-[250] no-print">
     <div class="flex items-center space-x-6">
         <span id="displayStoreName" class="text-xl font-black bg-blue-600 px-3 py-1 rounded">PRO POS</span>
-        <nav class="flex space-x-2 font-bold h-12 items-center">
-            <button onclick="changeTab('orderTab')" class="px-6 py-2 rounded-xl hover:bg-slate-800 active:bg-blue-700 transition">點餐</button>
-            <button onclick="changeTab('kdsTab')" class="px-6 py-2 rounded-xl hover:bg-slate-800 text-orange-400">廚房</button>
-            <button onclick="changeTab('reportTab')" class="px-6 py-2 rounded-xl hover:bg-slate-800 text-slate-400" id="navReport">報表</button>
-            <button onclick="changeTab('adminTab')" class="px-6 py-2 rounded-xl hover:bg-slate-800 text-slate-400" id="navAdmin">設定</button>
+        <nav class="flex space-x-2 font-bold">
+            <button onclick="changeTab('orderTab')" class="px-5 py-2 rounded-xl hover:bg-slate-800 btn-active">點餐</button>
+            <button onclick="changeTab('kdsTab')" class="px-5 py-2 rounded-xl hover:bg-slate-800 text-orange-400 btn-active">廚房</button>
+            <button onclick="changeTab('reportTab')" class="px-5 py-2 rounded-xl hover:bg-slate-800 text-slate-400 btn-active" id="navReport">報表</button>
+            <button onclick="changeTab('adminTab')" class="px-5 py-2 rounded-xl hover:bg-slate-800 text-slate-400 btn-active" id="navAdmin">設定</button>
         </nav>
     </div>
-    <div id="digitalClock" class="font-mono text-slate-400 tracking-widest hidden md:block">00:00:00</div>
+    <div id="digitalClock" class="font-mono text-slate-400 tracking-tighter">00:00:00</div>
 </header>
 
-<main class="relative h-screen">
-    <div id="sidebarOverlay" onclick="sidebarToggle(false)"></div>
+<main class="flex-1 flex overflow-hidden">
+    
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-[150] hidden" onclick="sidebarToggle(false)"></div>
 
-    <div id="orderTab" class="tab-content active flex-col lg:flex-row">
+    <div id="orderTab" class="tab-content active w-full">
         <div class="flex-1 p-6 overflow-y-auto custom-scrollbar">
             <div id="menuDisplay" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4"></div>
-            <div class="h-32"></div>
+            <div class="h-24"></div> 
         </div>
-        
-        <div id="sidebar" class="shadow-2xl border-l">
+
+        <div id="sidebar">
             <div class="p-6 bg-slate-50 border-b flex justify-between items-center">
-                <span class="text-3xl font-black text-blue-600 italic">NO. <span id="nextQueueNo">001</span></span>
-                <button onclick="sidebarToggle(false)" class="lg:hidden w-12 h-12 bg-white rounded-full shadow-md text-slate-500 flex items-center justify-center border font-bold">✕</button>
-            </div>
-            <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-3 bg-white custom-scrollbar"></div>
-            <div class="p-6 pb-12 bg-slate-50 border-t space-y-4">
-                <div class="flex justify-between items-center text-4xl font-black">
-                    <span class="text-lg text-slate-400">TOTAL</span>
-                    <span class="text-blue-600">$<span id="totalPrice">0</span></span>
+                <div class="flex flex-col">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none mb-1">Queue Number</span>
+                    <span class="text-3xl font-black text-blue-600">NO. <span id="nextQueueNo">001</span></span>
                 </div>
-                <button onclick="processCheckout()" class="action-btn w-full bg-blue-600 text-white py-6 text-2xl font-black shadow-xl active:bg-blue-800 transition">確認結帳</button>
+                <button onclick="sidebarToggle(false)" class="lg:hidden w-12 h-12 bg-white rounded-full shadow-sm border flex items-center justify-center font-bold text-slate-500">✕</button>
+            </div>
+            <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-3 bg-white"></div>
+            <div class="p-6 bg-slate-50 border-t space-y-4 pb-12">
+                <div class="flex justify-between items-center text-3xl font-black text-slate-800">
+                    <span class="text-base text-slate-400 uppercase">Total</span>
+                    <span>$<span id="totalPrice">0</span></span>
+                </div>
+                <button onclick="processCheckout()" class="w-full bg-blue-600 text-white py-6 rounded-2xl text-2xl font-black shadow-lg shadow-blue-200 btn-active transition-all active:bg-blue-800">
+                    確認結帳
+                </button>
             </div>
         </div>
-        
-        <button id="mobileCartBtn" onclick="sidebarToggle(true)" class="lg:hidden fixed bottom-8 right-8 bg-blue-600 text-white w-20 h-20 rounded-full shadow-2xl flex items-center justify-center z-[100] active:scale-95 transition">
+
+        <button id="mobileCartBtn" onclick="sidebarToggle(true)" class="lg:hidden fixed bottom-8 right-8 bg-blue-600 text-white w-20 h-20 rounded-full shadow-2xl flex items-center justify-center z-[120] active:scale-90 transition-transform">
             <span class="text-3xl">🛒</span>
-            <span id="mobileCartCount" class="absolute top-0 right-0 bg-red-500 text-white text-sm w-8 h-8 rounded-full flex items-center justify-center border-2 border-white font-black">0</span>
+            <span id="mobileCartCount" class="absolute -top-1 -right-1 bg-red-500 text-white text-sm w-8 h-8 rounded-full flex items-center justify-center border-4 border-white font-black">0</span>
         </button>
     </div>
 
-    <div id="kdsTab" class="tab-content bg-slate-800 p-6 overflow-x-auto"><div id="kdsContainer" class="flex space-x-6 h-full items-start"></div></div>
-    
+    <div id="kdsTab" class="tab-content bg-slate-800 p-6 overflow-x-auto">
+        <div id="kdsContainer" class="flex space-x-6 h-full items-start"></div>
+    </div>
+
     <div id="reportTab" class="tab-content bg-slate-100 p-8 overflow-y-auto flex-col">
-        <div class="max-w-6xl mx-auto w-full space-y-6 text-center">
-            <div class="grid grid-cols-3 gap-6 font-black">
-                <div class="bg-white p-8 rounded-3xl shadow-sm border">營收: $<span id="totalRevenue">0</span></div>
-                <div class="bg-white p-8 rounded-3xl shadow-sm border">單數: <span id="totalOrders">0</span></div>
-                <button onclick="exportToExcel()" class="bg-emerald-600 text-white rounded-3xl shadow-lg active:bg-emerald-800">匯出 Excel</button>
+        <div class="max-w-5xl mx-auto w-full space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border text-center">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">今日營收</p>
+                    <p class="text-3xl font-black text-blue-600">$<span id="totalRevenue">0</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-3xl shadow-sm border text-center">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">單數</p>
+                    <p class="text-3xl font-black text-slate-800" id="totalOrders">0</p>
+                </div>
+                <button onclick="exportToExcel()" class="bg-emerald-600 text-white rounded-3xl font-black text-xl shadow-lg btn-active">匯出 Excel</button>
             </div>
-            <div class="bg-white rounded-3xl shadow-xl overflow-hidden border"><table class="w-full text-left"><tbody id="reportTableBody" class="divide-y text-sm"></tbody></table></div>
+            <div class="bg-white rounded-3xl shadow-sm border overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-50 border-b text-slate-400 text-xs font-bold uppercase">
+                            <tr><th class="p-4">時間/單號</th><th class="p-4">取單號/明細</th><th class="p-4 text-right">金額</th><th class="p-4 text-center">操作</th></tr>
+                        </thead>
+                        <tbody id="reportTableBody" class="divide-y text-sm font-medium"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
     <div id="adminTab" class="tab-content bg-white p-8 overflow-y-auto flex-col">
-        <div class="max-w-2xl mx-auto w-full space-y-12">
-            <section class="bg-slate-50 p-8 rounded-3xl border space-y-4">
-                <h2 class="text-2xl font-black text-blue-600 border-l-8 border-blue-600 pl-4">品牌設定</h2>
-                <input type="text" id="cfgStoreName" placeholder="店名" class="w-full p-4 rounded-2xl border text-xl font-bold">
-                <input type="text" id="cfgPhone" placeholder="電話" class="w-full p-4 rounded-2xl border text-xl font-bold">
-                <input type="text" id="cfgNote" placeholder="小票備註" class="w-full p-4 rounded-2xl border text-xl font-bold">
-                <button onclick="updateSettings()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black">儲存設定</button>
+        <div class="max-w-xl mx-auto w-full space-y-10">
+            <section class="space-y-4">
+                <h2 class="text-2xl font-black text-blue-600 border-l-8 border-blue-600 pl-4">品牌資訊</h2>
+                <div class="bg-slate-50 p-6 rounded-3xl space-y-3">
+                    <input type="text" id="cfgStoreName" placeholder="店名" class="w-full p-4 rounded-2xl border font-bold">
+                    <input type="text" id="cfgPhone" placeholder="電話" class="w-full p-4 rounded-2xl border font-bold">
+                    <input type="text" id="cfgNote" placeholder="收據底部訊息" class="w-full p-4 rounded-2xl border font-bold">
+                    <button onclick="saveSettings()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black btn-active">儲存設定</button>
+                </div>
             </section>
-            <section class="bg-slate-50 p-8 rounded-3xl border space-y-4">
-                <h2 class="text-2xl font-black text-green-600 border-l-8 border-green-600 pl-4">餐點管理</h2>
-                <div class="flex flex-col sm:flex-row gap-2"><input type="text" id="newProdName" placeholder="品名" class="flex-1 p-4 border rounded-2xl"><input type="number" id="newProdPrice" placeholder="價格" class="w-full sm:w-28 p-4 border rounded-2xl"><input type="number" id="newProdStock" placeholder="庫存" class="w-full sm:w-28 p-4 border rounded-2xl"></div>
-                <button onclick="createNewProduct()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black">新增餐點</button>
-                <div id="menuListUI" class="space-y-4 mt-6"></div>
+            <section class="space-y-4">
+                <h2 class="text-2xl font-black text-green-600 border-l-8 border-green-600 pl-4">菜單庫存</h2>
+                <div class="bg-slate-50 p-6 rounded-3xl space-y-4">
+                    <div class="flex gap-2">
+                        <input type="text" id="newProdName" placeholder="品名" class="flex-1 p-3 border rounded-xl font-bold">
+                        <input type="number" id="newProdPrice" placeholder="價格" class="w-20 p-3 border rounded-xl font-bold text-center">
+                        <input type="number" id="newProdStock" placeholder="庫存" class="w-20 p-3 border rounded-xl font-bold text-center">
+                    </div>
+                    <button onclick="addProduct()" class="w-full bg-blue-600 text-white py-3 rounded-2xl font-black btn-active">新增餐點</button>
+                    <div id="menuListUI" class="space-y-2 mt-4"></div>
+                </div>
             </section>
         </div>
     </div>
@@ -137,11 +179,11 @@
 <div id="printArea"></div>
 
 <script>
-    /* --- [7. iPad 優化核心邏輯開始] --- */
-    let settings = JSON.parse(localStorage.getItem('pos_settings_v14')) || { storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
-    let menu = JSON.parse(localStorage.getItem('pos_menu_v14')) || [{ name: '招牌烤魚', price: 880, stock: 10 }];
-    let sales = JSON.parse(localStorage.getItem('pos_sales_v14')) || [];
-    let kdsOrders = JSON.parse(localStorage.getItem('pos_kds_v14')) || [];
+    /* --- [7. iPad 修正版核心邏輯] --- */
+    let settings = JSON.parse(localStorage.getItem('pos_settings_v15')) || { storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
+    let menu = JSON.parse(localStorage.getItem('pos_menu_v15')) || [{ name: '招牌烤魚', price: 880, stock: 10 }];
+    let sales = JSON.parse(localStorage.getItem('pos_sales_v15')) || [];
+    let kdsOrders = JSON.parse(localStorage.getItem('pos_kds_v15')) || [];
     let cart = [];
 
     function init() {
@@ -170,48 +212,49 @@
         const overlay = document.getElementById('sidebarOverlay');
         if (open) {
             sidebar.classList.add('sidebar-active');
-            overlay.style.display = 'block';
+            overlay.classList.remove('hidden');
         } else {
             sidebar.classList.remove('sidebar-active');
-            overlay.style.display = 'none';
+            overlay.classList.add('hidden');
         }
     }
 
-    function updateSettings() {
+    function saveSettings() {
         settings = { storeName: document.getElementById('cfgStoreName').value, phone: document.getElementById('cfgPhone').value, note: document.getElementById('cfgNote').value };
-        localStorage.setItem('pos_settings_v14', JSON.stringify(settings));
-        document.getElementById('displayStoreName').innerText = settings.storeName;
-        alert('設定已儲存');
+        localStorage.setItem('pos_settings_v15', JSON.stringify(settings));
+        init();
+        alert('設定成功！');
     }
 
     function renderMenu() {
         document.getElementById('menuDisplay').innerHTML = menu.map(p => {
             const isOut = p.stock <= 0;
-            return `<div onclick="${isOut ? '' : `addItemToCart('${p.name}', ${p.price})`}" class="${isOut ? 'bg-slate-200 opacity-50' : 'bg-white active:bg-blue-50 cursor-pointer'} p-6 rounded-3xl shadow-sm border-2 border-transparent hover:border-blue-400 transition h-40 flex flex-col justify-between relative shadow-blue-900/5">
+            return `<div onclick="${isOut ? '' : `addToCart('${p.name}', ${p.price})`}" class="${isOut ? 'bg-slate-200 opacity-60' : 'bg-white active:bg-blue-50 cursor-pointer'} p-6 rounded-[2rem] border-2 border-transparent shadow-sm flex flex-col justify-between h-40 relative transition-all active:scale-95">
                 <span class="font-black text-slate-800 text-xl leading-tight">${p.name}</span>
-                <div class="flex justify-between items-end"><span class="text-blue-600 font-black text-2xl">$${p.price}</span><span class="text-xs font-bold text-slate-400">存: ${p.stock}</span></div>
-                ${isOut ? '<span class="absolute inset-0 flex items-center justify-center font-black text-red-500 rotate-12 text-2xl">SOLD OUT</span>' : ''}
+                <div class="flex justify-between items-end"><span class="text-blue-600 font-black text-2xl">$${p.price}</span><span class="text-xs font-bold text-slate-400">STOCK: ${p.stock}</span></div>
+                ${isOut ? '<span class="absolute inset-0 flex items-center justify-center font-black text-red-500 rotate-12 text-2xl uppercase">Sold Out</span>' : ''}
             </div>`;
         }).join('');
     }
 
-    function addItemToCart(name, price) {
+    function addToCart(name, price) {
         const item = menu.find(m => m.name === name);
         const inCart = cart.filter(c => c.name === name).length;
         if (inCart >= item.stock) return alert('庫存不足');
         cart.push({name, price});
         renderCartUI();
+        if (window.innerWidth < 1024) sidebarToggle(true); // iPad 縱向點餐後自動顯示清單
     }
 
     function renderCartUI() {
         document.getElementById('mobileCartCount').innerText = cart.length;
         const container = document.getElementById('cartItems');
         if(cart.length === 0) {
-            container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-300 italic"><span class="text-6xl mb-4">🛒</span><p>等待點餐...</p></div>`;
+            container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-300 italic py-20"><p>尚未選取餐點</p></div>`;
             document.getElementById('totalPrice').innerText = '0';
             return;
         }
-        container.innerHTML = cart.map((item, idx) => `<div class="flex justify-between items-center bg-slate-50 p-5 rounded-2xl border text-lg font-bold"><span>${item.name}</span><div class="flex items-center space-x-4"><span>$${item.price}</span><button onclick="cart.splice(${idx},1);renderCartUI()" class="w-10 h-10 bg-white text-red-500 rounded-full shadow-sm flex items-center justify-center text-2xl font-black">✕</button></div></div>`).join('');
+        container.innerHTML = cart.map((item, idx) => `<div class="flex justify-between items-center bg-slate-50 p-5 rounded-2xl border text-lg font-bold"><span>${item.name}</span><div class="flex items-center space-x-4"><span>$${item.price}</span><button onclick="cart.splice(${idx},1);renderCartUI()" class="w-10 h-10 bg-white text-red-500 rounded-full shadow-sm flex items-center justify-center text-xl">✕</button></div></div>`).join('');
         document.getElementById('totalPrice').innerText = cart.reduce((s, i) => s + i.price, 0).toLocaleString();
     }
 
@@ -226,23 +269,22 @@
         sales.push({ date: now.toISOString(), total, queueNo, orderId, items: [...cart] });
         kdsOrders.push({ queueNo, items: [...cart], time: now.toISOString() });
         
-        localStorage.setItem('pos_menu_v14', JSON.stringify(menu));
-        localStorage.setItem('pos_sales_v14', JSON.stringify(sales));
-        localStorage.setItem('pos_kds_v14', JSON.stringify(kdsOrders));
+        localStorage.setItem('pos_menu_v15', JSON.stringify(menu));
+        localStorage.setItem('pos_sales_v15', JSON.stringify(sales));
+        localStorage.setItem('pos_kds_v15', JSON.stringify(kdsOrders));
 
         document.getElementById('printArea').innerHTML = `<div class="print-page"><h2 style="text-align:center">${settings.storeName}</h2><h1 style="text-align:center; font-size:40px">#${queueNo}</h1><hr>${cart.map(i=>`<div style="display:flex; justify-content:space-between"><span>${i.name}</span><span>$${i.price}</span></div>`).join('')}<hr><h2 style="text-align:right">總計: $${total}</h2><p style="text-align:center; font-size:10px">${settings.phone}<br>${settings.note}</p></div>`;
         window.print();
         
         cart = []; renderCartUI(); renderMenu(); updateQueueDisplay(); sidebarToggle(false);
-        alert('結帳成功，取單號為：' + queueNo);
     }
 
     function renderKDSUI() {
         const container = document.getElementById('kdsContainer');
-        container.innerHTML = kdsOrders.map((order, idx) => `<div class="w-80 bg-white rounded-3xl shadow-2xl flex-shrink-0 flex flex-col border-4 border-blue-500 overflow-hidden h-fit">
-            <div class="bg-blue-600 text-white p-4 flex justify-between items-center"><span class="text-4xl font-black">#${order.queueNo}</span><span class="font-mono text-xl timer" data-start="${order.time}">00:00</span></div>
-            <div class="p-6 space-y-3 font-black text-2xl text-slate-700">${order.items.map(i => `<div class="border-b-2 pb-2">□ ${i.name}</div>`).join('')}</div>
-            <button onclick="kdsOrders.splice(${idx},1);localStorage.setItem('pos_kds_v14',JSON.stringify(kdsOrders));renderKDSUI();" class="bg-emerald-500 text-white py-8 text-3xl font-black active:bg-emerald-700">完成出餐</button>
+        container.innerHTML = kdsOrders.map((order, idx) => `<div class="w-80 bg-white rounded-[2.5rem] shadow-2xl flex-shrink-0 flex flex-col border-4 border-blue-500 overflow-hidden h-fit">
+            <div class="bg-blue-600 text-white p-5 flex justify-between items-center"><span class="text-4xl font-black">#${order.queueNo}</span><span class="font-mono text-xl timer" data-start="${order.time}">00:00</span></div>
+            <div class="p-6 space-y-3 font-black text-2xl text-slate-700">${order.items.map(i => `<div class="border-b pb-2">□ ${i.name}</div>`).join('')}</div>
+            <button onclick="kdsOrders.splice(${idx},1);localStorage.setItem('pos_kds_v15',JSON.stringify(kdsOrders));renderKDSUI();" class="bg-emerald-500 text-white py-8 text-3xl font-black active:bg-emerald-700">完成</button>
         </div>`).join('');
     }
 
@@ -260,28 +302,28 @@
         const filtered = sales.filter(s => s.date.split('T')[0] === today).sort((a,b) => new Date(b.date) - new Date(a.date));
         document.getElementById('totalRevenue').innerText = filtered.reduce((s,v)=>s+v.total,0).toLocaleString();
         document.getElementById('totalOrders').innerText = filtered.length;
-        document.getElementById('reportTableBody').innerHTML = filtered.map(s => `<tr><td class="p-6"><div class="text-blue-600 font-black text-xl">${new Date(s.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div><div class="text-xs text-slate-400">#${s.orderId}</div></td><td class="p-6"><div class="font-black text-2xl">NO. ${s.queueNo}</div><div class="text-xs text-slate-500 font-bold">${s.items.map(i=>i.name).join(', ')}</div></td><td class="p-6 text-right font-black text-2xl">$${s.total}</td><td class="p-6 text-center"><button onclick="voidOrder('${s.orderId}')" class="text-red-500 border-2 border-red-100 px-6 py-2 rounded-2xl font-black text-sm active:bg-red-50">作廢</button></td></tr>`).join('') || '<tr><td colspan="4" class="p-20 text-center text-slate-300 font-black text-2xl">目前無成交紀錄</td></tr>';
+        document.getElementById('reportTableBody').innerHTML = filtered.map(s => `<tr><td class="p-6"><div class="text-blue-600 font-black text-xl">${new Date(s.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div><div class="text-xs text-slate-400">#${s.orderId}</div></td><td class="p-6"><div class="font-black text-2xl">NO. ${s.queueNo}</div><div class="text-xs text-slate-500 font-bold">${s.items.map(i=>i.name).join(', ')}</div></td><td class="p-6 text-right font-black text-2xl">$${s.total}</td><td class="p-6 text-center"><button onclick="voidOrder('${s.orderId}')" class="text-red-500 border-2 border-red-50 px-4 py-2 rounded-2xl font-black active:bg-red-50">作廢</button></td></tr>`).join('') || '<tr><td colspan="4" class="p-20 text-center text-slate-300 font-black">無成交紀錄</td></tr>';
     }
 
     function voidOrder(id) {
-        if(!confirm('作廢訂單將會回補庫存，確定？')) return;
+        if(!confirm('確認作廢訂單？庫存將自動回補')) return;
         const order = sales.find(s => s.orderId === id);
         order.items.forEach(i => { const m = menu.find(mi => mi.name === i.name); if(m) m.stock++; });
         sales = sales.filter(s => s.orderId !== id);
-        localStorage.setItem('pos_sales_v14', JSON.stringify(sales));
-        localStorage.setItem('pos_menu_v14', JSON.stringify(menu));
+        localStorage.setItem('pos_sales_v15', JSON.stringify(sales));
+        localStorage.setItem('pos_menu_v15', JSON.stringify(menu));
         renderReportUI(); renderMenu();
     }
 
     function renderAdminUI() {
-        document.getElementById('menuListUI').innerHTML = menu.map((p, i) => `<div class="flex justify-between items-center bg-white p-6 rounded-3xl border-2 border-slate-100 shadow-sm"><div class="flex flex-col"><span class="font-black text-slate-700 text-xl">${p.name}</span><span class="text-blue-600 font-black">$${p.price}</span></div><div class="flex items-center space-x-4"><span class="text-xs font-bold text-slate-400 uppercase">Stock:</span><input type="number" onchange="menu[${i}].stock=parseInt(this.value);localStorage.setItem('pos_menu_v14',JSON.stringify(menu));renderMenu();" value="${p.stock}" class="w-20 p-2 border-2 rounded-xl text-center font-black text-xl"><button onclick="if(confirm('刪除？')){menu.splice(${i},1);localStorage.setItem('pos_menu_v14',JSON.stringify(menu));renderAdminUI();renderMenu();}" class="text-red-500 font-black px-4">刪除</button></div></div>`).join('');
+        document.getElementById('menuListUI').innerHTML = menu.map((p, i) => `<div class="flex justify-between items-center bg-white p-6 rounded-3xl border shadow-sm"><div class="flex flex-col"><span class="font-black text-slate-700 text-xl">${p.name}</span><span class="text-blue-600 font-black">$${p.price}</span></div><div class="flex items-center space-x-4"><input type="number" onchange="menu[${i}].stock=parseInt(this.value);localStorage.setItem('pos_menu_v15',JSON.stringify(menu));renderMenu();" value="${p.stock}" class="w-20 p-2 border-2 rounded-xl text-center font-black text-xl"><button onclick="if(confirm('刪除？')){menu.splice(${i},1);localStorage.setItem('pos_menu_v15',JSON.stringify(menu));renderAdminUI();renderMenu();}" class="text-red-500 font-black px-4">✕</button></div></div>`).join('');
     }
 
-    function createNewProduct() {
+    function addProduct() {
         const name = document.getElementById('newProdName').value;
         const price = parseInt(document.getElementById('newProdPrice').value);
         const stock = parseInt(document.getElementById('newProdStock').value) || 0;
-        if(name && price) { menu.push({name, price, stock}); localStorage.setItem('pos_menu_v14', JSON.stringify(menu)); renderAdminUI(); renderMenu(); document.getElementById('newProdName').value=''; document.getElementById('newProdPrice').value=''; document.getElementById('newProdStock').value=''; }
+        if(name && price) { menu.push({name, price, stock}); localStorage.setItem('pos_menu_v15', JSON.stringify(menu)); renderAdminUI(); renderMenu(); document.getElementById('newProdName').value=''; document.getElementById('newProdPrice').value=''; document.getElementById('newProdStock').value=''; }
     }
 
     function updateQueueDisplay() {
@@ -292,7 +334,7 @@
     function exportToExcel() {
         const ws = XLSX.utils.json_to_sheet(sales.map(s => ({ '時間': s.date, '單號': s.orderId, '取單號': s.queueNo, '總額': s.total, '內容': s.items.map(i=>i.name).join(',') })));
         const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Sales");
-        XLSX.writeFile(wb, settings.storeName + "_報表.xlsx");
+        XLSX.writeFile(wb, "Sales_Report.xlsx");
     }
 
     init();
