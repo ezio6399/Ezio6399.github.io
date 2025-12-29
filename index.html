@@ -46,13 +46,43 @@
         .tab-content { display: none; height: calc(100vh - 64px); width: 100%; }
         .tab-content.active { display: flex; }
         .btn-active:active { transform: scale(0.96); opacity: 0.8; }
+                /* --- [修正版：57mm 熱感式列印規格] --- */
+    @media print {
+        /* 隱藏所有螢幕上的導航欄與按鈕 */
+        body * { visibility: hidden !important; }
         
-        @media print {
-            body * { visibility: hidden !important; }
-            #printArea, #printArea * { visibility: visible !important; }
-            #printArea { position: absolute; left: 0; top: 0; width: 57mm; }
-            .print-page { page-break-after: always; width: 57mm; padding: 2mm; color: black; font-family: monospace; }
+        /* 確保列印區域完全可見並強制為黑色文字 */
+        #printArea, #printArea * { 
+            visibility: visible !important; 
+            color: black !important;
         }
+        
+        #printArea { 
+            position: absolute; 
+            left: 0; 
+            top: 0; 
+            width: 52mm; /* 稍微縮小寬度防止右側被切掉 */
+            margin: 0;
+            padding: 0;
+        }
+
+        .print-page { 
+            width: 100%; 
+            font-family: monospace; /* 使用等寬字體確保排版整齊 */
+            font-size: 12pt; /* 適合 57mm 紙張的字體大小 */
+            line-height: 1.2;
+            page-break-after: always;
+            padding: 2mm;
+        }
+
+        /* 放大單號標題 */
+        .print-page h1 { font-size: 24pt !important; font-weight: 900 !important; margin: 2mm 0; }
+        .print-page h2 { font-size: 16pt !important; font-weight: bold !important; }
+        
+        /* 自定義分隔線 */
+        hr { border: none; border-top: 1px dashed black !important; margin: 2mm 0; }
+    }
+
     </style>
 </head>
 <body class="h-screen flex flex-col">
@@ -300,8 +330,32 @@
         db.ref('sales').push(orderData);
         db.ref('kds').child(orderId).set({ queueNo, items: [...cart], time: now.toISOString(), orderId });
 
-        document.getElementById('printArea').innerHTML = `<div class="print-page"><h2 style="text-align:center">${settings.storeName}</h2><h1 style="text-align:center; font-size:40px">#${queueNo}</h1><hr>${cart.map(i=>`<div style="display:flex; justify-content:space-between"><span>${i.name}</span><span>$${i.price}</span></div>`).join('')}<hr><h2 style="text-align:right">總計: $${total}</h2><p style="text-align:center; font-size:10px">${settings.phone}<br>${settings.note}</p></div>`;
-        window.print();
+      /* --- [修正版：出單排版] --- */
+        document.getElementById('printArea').innerHTML = `
+            <div class="print-page">
+                <h2 style="text-align:center; margin:0;">${settings.storeName}</h2>
+                <h1 style="text-align:center;">#${qNo}</h1>
+                <div style="text-align:center; font-size:9pt;">${now.toLocaleString()}</div>
+                <hr>
+                <div style="width:100%;">
+                    ${cart.map(i => `
+                        <div style="display:flex; justify-content:space-between; margin-bottom:1mm;">
+                            <span style="font-weight:bold;">${i.name}</span>
+                            <span>$${i.price}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <hr>
+                <div style="display:flex; justify-content:space-between; font-size:16pt; font-weight:bold;">
+                    <span>總計</span>
+                    <span>$${total}</span>
+                </div>
+                <div style="text-align:center; font-size:9pt; margin-top:4mm;">
+                    ${settings.phone}<br>
+                    ${settings.note}<br>
+                    *** 謝謝惠顧 ***
+                </div>
+            </div>`;
         
         cart = []; renderCartUI(); sidebarToggle(false);
     }
