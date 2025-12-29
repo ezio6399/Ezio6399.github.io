@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>南屯任烤魚 - 雲端版 v17</title>
+    <title>南屯任烤魚 - 雲端版 v18 穩定版</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
     <style>
-        /* [2. iPad 觸控與介面修正 CSS] */
         body { font-family: -apple-system, system-ui, sans-serif; touch-action: manipulation; -webkit-overflow-scrolling: touch; overflow: hidden; background-color: #f8fafc; }
         .tab-content { display: none; height: calc(100vh - 64px); width: 100%; }
         .tab-content.active { display: flex; }
@@ -20,7 +19,8 @@
         @media (min-width: 1024px) { #sidebar { position: relative; transform: translateX(0) !important; visibility: visible !important; } }
         @media (max-width: 1023px) { #sidebar { transform: translateX(100%); z-index: 200; } #sidebar.sidebar-active { transform: translateX(0); visibility: visible !important; } }
 
-        /* [3. 57mm 熱感式列印 CSS] */
+        /* 57mm 熱感式列印 CSS */
+        #printArea { position: fixed; left: -9999px; top: 0; }
         @media print {
             body * { visibility: hidden !important; }
             #printArea, #printArea * { visibility: visible !important; color: black !important; }
@@ -30,6 +30,14 @@
             .print-page h2 { font-size: 16pt !important; font-weight: bold !important; }
             hr { border: none; border-top: 1px dashed black !important; margin: 2mm 0; }
         }
+
+        /* 載入動畫 */
+        .loading-spinner { border: 3px solid #f3f4f6; border-top: 3px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* 錯誤提示 */
+        .error-toast { position: fixed; top: 80px; right: 20px; background: #ef4444; color: white; padding: 16px 24px; rounded: 12px; z-index: 9999; animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     </style>
 </head>
 <body class="h-screen flex flex-col">
@@ -44,7 +52,10 @@
             <button onclick="changeTab('adminTab')" class="px-4 py-2 rounded-xl hover:bg-slate-800 text-slate-400">設定</button>
         </nav>
     </div>
-    <div id="digitalClock" class="font-mono text-slate-400 tracking-widest hidden md:block">00:00:00</div>
+    <div class="flex items-center space-x-4">
+        <div id="connectionStatus" class="w-3 h-3 rounded-full bg-green-500" title="Firebase 連線狀態"></div>
+        <div id="digitalClock" class="font-mono text-slate-400 tracking-widest hidden md:block">00:00:00</div>
+    </div>
 </header>
 
 <main class="flex-1 flex overflow-hidden relative">
@@ -70,7 +81,7 @@
                     <span class="text-base text-slate-400 uppercase font-bold tracking-wider">Total</span>
                     <span>$<span id="totalPrice">0</span></span>
                 </div>
-                <button onclick="processCheckout()" class="w-full bg-blue-600 text-white py-6 rounded-2xl text-2xl font-black shadow-lg shadow-blue-200 active:bg-blue-800 transition-all">確認結帳</button>
+                <button id="checkoutBtn" onclick="processCheckout()" class="w-full bg-blue-600 text-white py-6 rounded-2xl text-2xl font-black shadow-lg shadow-blue-200 active:bg-blue-800 transition-all disabled:bg-slate-300 disabled:cursor-not-allowed">確認結帳</button>
             </div>
         </div>
 
@@ -93,7 +104,7 @@
             </div>
             <div class="bg-white rounded-3xl shadow-sm border overflow-hidden">
                 <table class="w-full text-left font-bold border-collapse">
-                    <thead class="bg-slate-50 border-b text-slate-400 text-xs uppercase"><tr class="divide-x"><th class="p-4">時間</th><th class="p-4 text-center">取單號</th><th class="p-4 text-right">金額</th><th class="p-4 text-center">操作</th></tr></thead>
+                    <thead class="bg-slate-50 border-b text-slate-400 text-xs uppercase"><tr class="divide-x"><th class="p-4">時間</th><th class="p-4 text-center">取單號</th><th class="p-4 text-right">金額</th><th class="p-4">狀態</th><th class="p-4 text-center">操作</th></tr></thead>
                     <tbody id="reportTableBody" class="divide-y text-sm"></tbody>
                 </table>
             </div>
@@ -125,7 +136,11 @@
 <div id="printArea"></div>
 
 <script>
-    /* [9. Firebase 初始化] */
+    /* ========== 常數定義 ========== */
+    const ORDER_ID_LENGTH = 8;
+    const TOAST_DURATION = 3000;
+    
+    /* ========== Firebase 初始化 ========== */
     const firebaseConfig = {
         apiKey: "AIzaSyB4V2Zfzl_22tka2QHfkNSGaa23ke2TeWk",
         authDomain: "flash-e1c46.firebaseapp.com",
@@ -140,12 +155,42 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     
-    /* 系統變數 */
+    /* ========== 系統變數 ========== */
     let settings = { storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
-    let menu = []; let sales = []; let kdsOrders = []; let cart = [];
+    let menu = [];
+    let sales = [];
+    let kdsOrders = [];
+    let cart = [];
+    let isProcessing = false;
 
-    /* [10. 雲端監聽與啟動] */
+    /* ========== 工具函式 ========== */
+    function generateOrderId() {
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substr(2, 5);
+        return `${timestamp}-${random}`;
+    }
+
+    function showToast(message, isError = false) {
+        const toast = document.createElement('div');
+        toast.className = `error-toast ${isError ? 'bg-red-500' : 'bg-green-500'}`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), TOAST_DURATION);
+    }
+
+    function updateConnectionStatus(isConnected) {
+        const status = document.getElementById('connectionStatus');
+        status.className = `w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`;
+        status.title = isConnected ? 'Firebase 已連線' : 'Firebase 離線';
+    }
+
+    /* ========== Firebase 監聽與初始化 ========== */
     function init() {
+        // 連線狀態監聽
+        db.ref('.info/connected').on('value', snap => {
+            updateConnectionStatus(snap.val() === true);
+        });
+
         // 品牌設定同步
         db.ref('settings').on('value', snap => { 
             if(snap.val()) { 
@@ -155,61 +200,158 @@
                 document.getElementById('cfgPhone').value = settings.phone; 
                 document.getElementById('cfgNote').value = settings.note || ''; 
             } 
+        }, error => {
+            console.error('設定載入失敗:', error);
+            showToast('設定載入失敗', true);
         });
+
         // 菜單與庫存同步
         db.ref('menu').on('value', snap => { 
             menu = snap.val() ? Object.values(snap.val()) : []; 
             renderMenu(); 
             renderAdminUI(); 
+        }, error => {
+            console.error('菜單載入失敗:', error);
+            showToast('菜單載入失敗', true);
         });
+
         // 銷貨紀錄同步
         db.ref('sales').on('value', snap => { 
             sales = snap.val() ? Object.values(snap.val()) : []; 
             renderReportUI(); 
             updateQueueDisplay(); 
+        }, error => {
+            console.error('報表載入失敗:', error);
+            showToast('報表載入失敗', true);
         });
+
         // 廚房單同步
         db.ref('kds').on('value', snap => { 
             kdsOrders = snap.val() ? Object.values(snap.val()) : []; 
             renderKDSUI(); 
+        }, error => {
+            console.error('廚房單載入失敗:', error);
+            showToast('廚房單載入失敗', true);
         });
+
         // 系統時鐘
-        setInterval(() => { document.getElementById('digitalClock').innerText = new Date().toLocaleTimeString(); }, 1000);
+        setInterval(() => { 
+            document.getElementById('digitalClock').innerText = new Date().toLocaleTimeString(); 
+        }, 1000);
+        
         setInterval(refreshKDSTimers, 1000);
         renderCartUI();
     }
 
-    /* [11. 核心業務邏輯：結帳] */
-    function processCheckout() {
-        if(cart.length === 0) return;
-        const qNo = document.getElementById('nextQueueNo').innerText;
-        const now = new Date(); 
-        const oId = Date.now().toString().slice(-6); // 短單號
-        const total = cart.reduce((s,i)=>s+i.price,0);
-
-        // 1. 更新雲端庫存 (逐一扣除)
-        cart.forEach(c => { 
-            const m = menu.find(mi => mi.name === c.name); 
-            if(m) { m.stock--; db.ref('menu').child(m.name).set(m); } 
-        });
+    /* ========== 核心業務邏輯：結帳 ========== */
+    async function processCheckout() {
+        if(cart.length === 0) {
+            showToast('購物車是空的', true);
+            return;
+        }
         
-        // 2. 推送至雲端銷貨報表與 KDS
-        const oData = { date: now.toISOString(), total, queueNo: qNo, orderId: oId, items: [...cart] };
-        db.ref('sales').push(oData);
-        db.ref('kds').child(oId).set({ queueNo: qNo, items: [...cart], time: now.toISOString(), orderId: oId });
+        if(isProcessing) {
+            showToast('處理中，請稍候...', true);
+            return;
+        }
 
-        // 3. 準備列印區域 (針對 57mm 紙張排版)
+        isProcessing = true;
+        const checkoutBtn = document.getElementById('checkoutBtn');
+        checkoutBtn.disabled = true;
+        checkoutBtn.innerHTML = '<div class="loading-spinner mx-auto"></div>';
+
+        try {
+            const qNo = document.getElementById('nextQueueNo').innerText;
+            const now = new Date();
+            const oId = generateOrderId();
+            const total = cart.reduce((s, i) => s + i.price, 0);
+
+            // 1. 統計購物車商品數量（修正：處理重複商品）
+            const itemCount = {};
+            cart.forEach(c => {
+                itemCount[c.name] = (itemCount[c.name] || 0) + 1;
+            });
+
+            // 2. 檢查庫存是否足夠
+            for(const [name, qty] of Object.entries(itemCount)) {
+                const product = menu.find(m => m.name === name);
+                if(!product || product.stock < qty) {
+                    throw new Error(`${name} 庫存不足`);
+                }
+            }
+
+            // 3. 使用 Transaction 更新庫存（避免併發問題）
+            const stockUpdates = Object.entries(itemCount).map(([name, qty]) => {
+                return db.ref('menu').child(name).transaction(current => {
+                    if(current && current.stock >= qty) {
+                        current.stock -= qty;
+                        return current;
+                    }
+                    return; // 取消交易
+                });
+            });
+
+            await Promise.all(stockUpdates);
+
+            // 4. 推送至雲端銷貨報表與 KDS
+            const oData = { 
+                date: now.toISOString(), 
+                total, 
+                queueNo: qNo, 
+                orderId: oId, 
+                items: [...cart],
+                status: 'active'
+            };
+            
+            await db.ref('sales').child(oId).set(oData);
+            await db.ref('kds').child(oId).set({ 
+                queueNo: qNo, 
+                items: [...cart], 
+                time: now.toISOString(), 
+                orderId: oId 
+            });
+
+            // 5. 準備列印區域
+            printReceipt(qNo, now, cart, total);
+
+            // 6. 重置購物車與收回側邊欄
+            cart = [];
+            renderCartUI();
+            sidebarToggle(false);
+            
+            showToast(`結帳成功！取單號：${qNo}`);
+            
+        } catch(error) {
+            console.error('結帳失敗:', error);
+            showToast(error.message || '結帳失敗，請重試', true);
+        } finally {
+            isProcessing = false;
+            checkoutBtn.disabled = false;
+            checkoutBtn.innerHTML = '確認結帳';
+        }
+    }
+
+    function printReceipt(qNo, date, items, total) {
+        // 合併相同商品顯示
+        const itemSummary = {};
+        items.forEach(i => {
+            if(!itemSummary[i.name]) {
+                itemSummary[i.name] = { ...i, qty: 0 };
+            }
+            itemSummary[i.name].qty++;
+        });
+
         document.getElementById('printArea').innerHTML = `
             <div class="print-page" style="text-align:center;">
                 <h2 style="margin:0;">${settings.storeName}</h2>
                 <h1 style="margin:2mm 0;">#${qNo}</h1>
-                <div style="font-size:9pt;">${now.toLocaleString()}</div>
+                <div style="font-size:9pt;">${date.toLocaleString()}</div>
                 <hr>
                 <div style="width:100%; text-align:left;">
-                    ${cart.map(i => `
+                    ${Object.values(itemSummary).map(i => `
                         <div style="display:flex; justify-content:space-between; margin-bottom:1mm;">
-                            <span style="font-weight:bold;">${i.name}</span>
-                            <span>$${i.price}</span>
+                            <span style="font-weight:bold;">${i.name} x${i.qty}</span>
+                            <span>$${i.price * i.qty}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -223,47 +365,94 @@
                 </div>
             </div>`;
         
-        window.print();
-        
-        // 4. 重置購物車與收回側邊欄
-        cart = []; 
-        renderCartUI(); 
-        sidebarToggle(false); 
-        alert('結帳完成！取單號為：' + qNo);
+        setTimeout(() => window.print(), 100);
     }
 
-    /* [12. UI 渲染輔助函式] */
+    /* ========== UI 渲染函式 ========== */
     function renderMenu() {
         document.getElementById('menuDisplay').innerHTML = menu.map(p => `
-            <div onclick="${p.stock <= 0 ? '' : `addItemToCart('${p.name}', ${p.price})`}" class="${p.stock <= 0 ? 'bg-slate-200 opacity-60 cursor-not-allowed' : 'bg-white active:bg-blue-50 cursor-pointer'} p-6 rounded-[2rem] border shadow-sm h-40 flex flex-col justify-between relative active:scale-95 transition-all">
+            <div onclick="${p.stock <= 0 ? '' : `addItemToCart('${p.name}', ${p.price})`}" 
+                 class="${p.stock <= 0 ? 'bg-slate-200 opacity-60 cursor-not-allowed' : 'bg-white active:bg-blue-50 cursor-pointer'} p-6 rounded-[2rem] border shadow-sm h-40 flex flex-col justify-between relative active:scale-95 transition-all">
                 <span class="font-black text-slate-800 text-xl leading-tight">${p.name}</span>
                 <div class="flex justify-between items-end">
                     <span class="text-blue-600 font-black text-2xl">$${p.price}</span>
-                    <span class="text-xs font-bold text-slate-400">STOCK: ${p.stock}</span>
+                    <span class="text-xs font-bold ${p.stock <= 5 ? 'text-red-500' : 'text-slate-400'}">庫存: ${p.stock}</span>
                 </div>
-                ${p.stock <= 0 ? '<span class="absolute inset-0 flex items-center justify-center font-black text-red-500 rotate-12 text-2xl">SOLD OUT</span>' : ''}
+                ${p.stock <= 0 ? '<span class="absolute inset-0 flex items-center justify-center font-black text-red-500 rotate-12 text-2xl">售完</span>' : ''}
             </div>`).join('');
     }
 
-    function addItemToCart(n, p) { cart.push({name:n, price:p}); renderCartUI(); if(window.innerWidth < 1024) sidebarToggle(true); }
+    function addItemToCart(n, p) {
+        const product = menu.find(m => m.name === n);
+        if(!product || product.stock <= 0) {
+            showToast('商品庫存不足', true);
+            return;
+        }
+
+        // 檢查購物車內該商品數量是否已達庫存上限
+        const cartCount = cart.filter(i => i.name === n).length;
+        if(cartCount >= product.stock) {
+            showToast(`${n} 庫存不足`, true);
+            return;
+        }
+
+        cart.push({name: n, price: p});
+        renderCartUI();
+        
+        if(window.innerWidth < 1024) {
+            sidebarToggle(true);
+        }
+    }
 
     function renderCartUI() {
         document.getElementById('mobileCartCount').innerText = cart.length;
         const container = document.getElementById('cartItems');
+        
         if(cart.length === 0) {
             container.innerHTML = `<div class="h-full flex items-center justify-center text-slate-300 italic py-20">等待點餐...</div>`;
             document.getElementById('totalPrice').innerText = '0';
             return;
         }
-        container.innerHTML = cart.map((i, idx) => `
+
+        // 合併相同商品顯示
+        const cartSummary = {};
+        cart.forEach((item, idx) => {
+            if(!cartSummary[item.name]) {
+                cartSummary[item.name] = { ...item, qty: 0, indices: [] };
+            }
+            cartSummary[item.name].qty++;
+            cartSummary[item.name].indices.push(idx);
+        });
+
+        container.innerHTML = Object.values(cartSummary).map(i => `
             <div class="flex justify-between items-center bg-slate-50 p-5 rounded-2xl border text-lg font-bold">
-                <span>${i.name}</span>
+                <div class="flex-1">
+                    <div>${i.name}</div>
+                    <div class="text-sm text-slate-400">x${i.qty}</div>
+                </div>
                 <div class="flex items-center space-x-4">
-                    <span>$${i.price}</span>
-                    <button onclick="cart.splice(${idx},1);renderCartUI()" class="w-10 h-10 bg-white text-red-500 rounded-full shadow-sm flex items-center justify-center text-xl font-black">✕</button>
+                    <span class="text-blue-600">$${i.price * i.qty}</span>
+                    <div class="flex gap-2">
+                        <button onclick="removeOneFromCart('${i.name}')" class="w-10 h-10 bg-white text-slate-600 rounded-full shadow-sm flex items-center justify-center text-xl font-black">−</button>
+                        <button onclick="removeAllFromCart('${i.name}')" class="w-10 h-10 bg-white text-red-500 rounded-full shadow-sm flex items-center justify-center text-xl font-black">✕</button>
+                    </div>
                 </div>
             </div>`).join('');
+        
         document.getElementById('totalPrice').innerText = cart.reduce((s, i) => s + i.price, 0).toLocaleString();
+    }
+
+    function removeOneFromCart(name) {
+        const idx = cart.findIndex(i => i.name === name);
+        if(idx !== -1) {
+            cart.splice(idx, 1);
+            renderCartUI();
+        }
+    }
+
+    function removeAllFromCart(name) {
+        cart = cart.filter(i => i.name !== name);
+        renderCartUI();
     }
 
     function renderKDSUI() {
@@ -274,61 +463,38 @@
                     <span class="font-mono text-xl timer" data-start="${o.time}">00:00</span>
                 </div>
                 <div class="p-6 space-y-3 font-black text-2xl text-slate-700">
-                    ${o.items.map(i => `<div class="border-b pb-2">□ ${i.name}</div>`).join('')}
+                    ${(() => {
+                        const items = {};
+                        o.items.forEach(i => items[i.name] = (items[i.name] || 0) + 1);
+                        return Object.entries(items).map(([name, qty]) => 
+                            `<div class="border-b pb-2">□ ${name} ${qty > 1 ? 'x' + qty : ''}</div>`
+                        ).join('');
+                    })()}
                 </div>
-                <button onclick="db.ref('kds').child('${o.orderId}').remove()" class="bg-emerald-500 text-white py-8 text-3xl font-black active:bg-emerald-700 transition">完成</button>
+                <button onclick="completeOrder('${o.orderId}')" class="bg-emerald-500 text-white py-8 text-3xl font-black active:bg-emerald-700 transition">完成</button>
             </div>`).join('');
+    }
+
+    function completeOrder(orderId) {
+        db.ref('kds').child(orderId).remove()
+            .then(() => showToast('訂單已完成'))
+            .catch(err => {
+                console.error('完成訂單失敗:', err);
+                showToast('操作失敗', true);
+            });
     }
 
     function renderReportUI() {
         const today = new Date().toISOString().split('T')[0];
-        const filtered = sales.filter(s => s.date.split('T')[0] === today).sort((a,b) => new Date(b.date) - new Date(a.date));
-        document.getElementById('totalRevenue').innerText = "$" + filtered.reduce((s,v)=>s+v.total,0).toLocaleString();
+        const filtered = sales
+            .filter(s => s.date.split('T')[0] === today && s.status === 'active')
+            .sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        document.getElementById('totalRevenue').innerText = "$" + filtered.reduce((s, v) => s + v.total, 0).toLocaleString();
         document.getElementById('totalOrders').innerText = filtered.length;
+        
         document.getElementById('reportTableBody').innerHTML = filtered.map(s => `
             <tr>
                 <td class="p-6 text-blue-600 font-black">${new Date(s.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
                 <td class="p-6 text-center text-2xl font-black">#${s.queueNo}</td>
                 <td class="p-6 text-right font-black text-2xl">$${s.total}</td>
-                <td class="p-6 text-center"><button onclick="voidOrder('${s.orderId}')" class="text-red-500 font-black border-2 border-red-50 px-4 py-1 rounded-xl active:bg-red-50 transition">作廢</button></td>
-            </tr>`).join('');
-    }
-
-    function voidOrder(oId) {
-        if(!confirm('確認作廢此訂單？庫存將回補雲端。')) return;
-        db.ref('sales').orderByChild('orderId').equalTo(oId).once('value', snap => {
-            snap.forEach(child => {
-                const order = child.val();
-                order.items.forEach(i => {
-                    const m = menu.find(mi => mi.name === i.name);
-                    if(m) { m.stock++; db.ref('menu').child(m.name).set(m); }
-                });
-                child.ref.remove();
-            });
-        });
-    }
-
-    function renderAdminUI() {
-        document.getElementById('menuListUI').innerHTML = menu.map(p => `
-            <div class="flex justify-between items-center bg-white p-6 rounded-3xl border shadow-sm">
-                <div class="flex flex-col"><span class="font-black text-slate-700 text-xl font-sans">${p.name}</span><span class="text-blue-600 font-black">$${p.price}</span></div>
-                <div class="flex items-center space-x-4">
-                    <input type="number" onchange="db.ref('menu').child('${p.name}').update({stock:parseInt(this.value)})" value="${p.stock}" class="w-20 p-2 border-2 rounded-xl text-center font-black text-xl">
-                    <button onclick="if(confirm('刪除？')) db.ref('menu').child('${p.name}').remove()" class="text-red-500 font-black px-4 text-2xl">✕</button>
-                </div>
-            </div>`).join('');
-    }
-
-    /* [13. 介面與功能小工具] */
-    function saveSettings() { db.ref('settings').set({ storeName: document.getElementById('cfgStoreName').value, phone: document.getElementById('cfgPhone').value, note: document.getElementById('cfgNote').value }); alert('雲端品牌資訊已同步'); }
-    function addProduct() { const n = document.getElementById('newProdName').value; const p = parseInt(document.getElementById('newProdPrice').value); const s = parseInt(document.getElementById('newProdStock').value) || 0; if (n && p) { db.ref('menu').child(n).set({ name:n, price:p, stock:s }); document.getElementById('newProdName').value=''; } }
-    function changeTab(id) { document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active')); document.getElementById(id).classList.add('active'); if(id==='reportTab') renderReportUI(); sidebarToggle(false); }
-    function sidebarToggle(open) { const sb = document.getElementById('sidebar'); const ov = document.getElementById('sidebarOverlay'); if(open) { sb.classList.add('sidebar-active'); ov.classList.remove('hidden'); } else { sb.classList.remove('sidebar-active'); ov.classList.add('hidden'); } }
-    function updateQueueDisplay() { const today = new Date().toISOString().split('T')[0]; document.getElementById('nextQueueNo').innerText = (sales.filter(s => s.date.split('T')[0] === today).length + 1).toString().padStart(3, '0'); }
-    function refreshKDSTimers() { document.querySelectorAll('.timer').forEach(el => { const diff = Math.floor((new Date() - new Date(el.dataset.start)) / 1000); const m = Math.floor(diff / 60).toString().padStart(2, '0'); const s = (diff % 60).toString().padStart(2, '0'); el.innerText = `${m}:${s}`; }); }
-    function exportToExcel() { const ws = XLSX.utils.json_to_sheet(sales.map(s => ({ '時間': s.date, '單號': s.orderId, '取單號': s.queueNo, '總額': s.total, '內容': s.items.map(i=>i.name).join(',') }))); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Sales"); XLSX.writeFile(wb, settings.storeName + "_報表.xlsx"); }
-
-    init();
-</script>
-</body>
-</html>
