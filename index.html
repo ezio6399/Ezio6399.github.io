@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>PRO POS - Universal + Cloud Print (Fixed)</title>
+  <title>PRO POS - Shift + DateTime Report + Details + Void Restock</title>
 
   <!-- Polyfills：救老 PC / 舊 Safari（避免整頁 JS 直接死掉） -->
   <script src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"></script>
@@ -25,13 +25,13 @@
       top: 0; right: 0; bottom: 0;
       width: 380px;
       background: white;
-      z-index: 220; /* ✅ 修正：永遠壓過 overlay，避免看起來像當機 */
+      z-index: 220;
       display: flex;
       flex-direction: column;
       border-left: 1px solid #e2e8f0;
       transition: transform 0.25s ease-in-out;
       box-shadow: -4px 0 15px rgba(0,0,0,0.05);
-      flex-shrink: 0; /* ✅ 修正：PC flex 佈局不會把 sidebar 壓扁到按鈕消失 */
+      flex-shrink: 0;
     }
 
     @media (min-width: 1024px) {
@@ -42,7 +42,7 @@
         visibility: visible !important;
         flex-shrink: 0 !important;
       }
-      #sidebarOverlay { display: none !important; } /* ✅ 修正：PC 永遠不要 overlay */
+      #sidebarOverlay { display: none !important; }
     }
 
     @media (max-width: 1023px) {
@@ -50,10 +50,8 @@
       #sidebar.sidebar-active { transform: translateX(0); visibility: visible !important; }
     }
 
-    /* Overlay：只給手機/平板用 */
     #sidebarOverlay { z-index: 150; }
 
-    /* Print CSS 保留（但 POS 不再直接 window.print，交給 Print Agent） */
     @media print {
       body * { visibility: hidden !important; }
       #printArea, #printArea * { visibility: visible !important; color: black !important; }
@@ -78,7 +76,14 @@
       <button data-tab="adminTab" class="px-4 py-2 rounded-xl hover:bg-slate-800 text-slate-400">設定</button>
     </nav>
   </div>
-  <div id="digitalClock" class="font-mono text-slate-400 tracking-widest hidden md:block">00:00:00</div>
+
+  <div class="flex items-center gap-4">
+    <div id="shiftBadge" class="hidden md:flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-xl text-xs font-black">
+      <span class="text-slate-400">班別</span>
+      <span id="shiftStatusText" class="text-emerald-400">未開班</span>
+    </div>
+    <div id="digitalClock" class="font-mono text-slate-400 tracking-widest hidden md:block">00:00:00</div>
+  </div>
 </header>
 
 <main class="flex-1 flex overflow-hidden relative">
@@ -87,16 +92,29 @@
   <!-- 點餐 -->
   <div id="orderTab" class="tab-content active w-full">
     <div class="flex-1 p-6 overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <div class="font-black text-slate-700">
+          <span class="text-slate-400 text-xs uppercase tracking-widest">Shift</span>
+          <div class="text-lg">
+            <span id="shiftLineText">未開班（請到「報表」或「設定」開班）</span>
+          </div>
+        </div>
+        <div class="hidden sm:flex items-center gap-2">
+          <button id="openShiftMiniBtn" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-black active:bg-emerald-700">開班</button>
+          <button id="closeShiftMiniBtn" class="px-4 py-2 rounded-xl bg-rose-600 text-white font-black active:bg-rose-700">關班</button>
+        </div>
+      </div>
+
       <div id="menuDisplay" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4"></div>
       <div class="h-32"></div>
     </div>
 
-    <!-- ✅ 修正：加 flex-shrink-0，PC 不會把它壓沒 -->
     <div id="sidebar" class="flex-shrink-0">
       <div class="p-6 bg-slate-50 border-b flex justify-between items-center">
         <div class="flex flex-col">
           <span class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Queue No.</span>
-          <span class="text-3xl font-black text-blue-600 italic">#<span id="nextQueueNo">001</span></span>
+          <span class="text-3xl font-black text-blue-600 italic">#<span id="nextQueueNo">---</span></span>
+          <span class="text-xs font-black text-slate-400 mt-1">以「開班」為起點</span>
         </div>
         <button id="closeSidebarBtn" class="lg:hidden w-12 h-12 bg-white rounded-full shadow-sm border flex items-center justify-center font-bold text-slate-500 text-2xl">✕</button>
       </div>
@@ -109,13 +127,12 @@
           <span>$<span id="totalPrice">0</span></span>
         </div>
 
-        <!-- ✅ 修正：按鈕不會消失；結帳時會被 disable，但一定會解除 -->
         <button id="checkoutBtn" class="w-full bg-blue-600 text-white py-6 rounded-2xl text-2xl font-black shadow-lg shadow-blue-200 active:bg-blue-800 transition-all">
           確認結帳
         </button>
 
         <div class="text-xs text-slate-400 font-bold">
-          列印模式：<span class="text-emerald-600">雲端列印</span>（由 Print Agent 印出）
+          列印：<span class="text-emerald-600">雲端列印（Print Agent）</span>
         </div>
       </div>
     </div>
@@ -133,10 +150,50 @@
 
   <!-- 報表 -->
   <div id="reportTab" class="tab-content bg-slate-100 p-8 overflow-y-auto flex-col">
-    <div class="max-w-5xl mx-auto w-full space-y-6">
+    <div class="max-w-6xl mx-auto w-full space-y-6">
+
+      <!-- 班別控制 + 篩選 -->
+      <div class="bg-white rounded-3xl border shadow-sm p-6 space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div class="font-black text-slate-800">
+            <div class="text-xs text-slate-400 uppercase tracking-widest">結算方式</div>
+            <div class="text-xl">以「開班」開始計算，「關班」做結帳</div>
+            <div class="text-sm text-slate-400 font-bold mt-1">班別狀態：<span id="reportShiftStatus" class="text-emerald-600">未開班</span></div>
+          </div>
+
+          <div class="flex gap-2">
+            <button id="openShiftBtn" class="px-5 py-3 rounded-2xl bg-emerald-600 text-white font-black active:bg-emerald-700">開班</button>
+            <button id="closeShiftBtn" class="px-5 py-3 rounded-2xl bg-rose-600 text-white font-black active:bg-rose-700">關班</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
+          <div class="space-y-1">
+            <div class="text-xs font-black text-slate-400 uppercase">班別</div>
+            <select id="shiftSelect" class="w-full p-3 rounded-2xl border font-black"></select>
+          </div>
+
+          <div class="space-y-1">
+            <div class="text-xs font-black text-slate-400 uppercase">開始時間</div>
+            <input id="dtStart" type="datetime-local" class="w-full p-3 rounded-2xl border font-black">
+          </div>
+
+          <div class="space-y-1">
+            <div class="text-xs font-black text-slate-400 uppercase">結束時間</div>
+            <input id="dtEnd" type="datetime-local" class="w-full p-3 rounded-2xl border font-black">
+          </div>
+
+          <div class="flex items-end gap-2">
+            <button id="applyReportFilterBtn" class="flex-1 py-3 rounded-2xl bg-slate-900 text-white font-black active:scale-95">套用篩選</button>
+            <button id="resetReportFilterBtn" class="flex-1 py-3 rounded-2xl bg-white border font-black text-slate-700 active:bg-slate-50">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI + 匯出 -->
       <div class="grid grid-cols-3 gap-6 font-black text-center">
         <div class="bg-white p-6 rounded-3xl border shadow-sm">
-          <p class="text-xs text-slate-400 uppercase">今日營收</p>
+          <p class="text-xs text-slate-400 uppercase">篩選營收</p>
           <p id="totalRevenue" class="text-blue-600 text-2xl">$0</p>
         </div>
         <div class="bg-white p-6 rounded-3xl border shadow-sm">
@@ -146,13 +203,15 @@
         <button id="exportExcelBtn" class="bg-emerald-600 text-white rounded-3xl text-xl shadow-lg active:bg-emerald-700">匯出 Excel</button>
       </div>
 
+      <!-- 表格 -->
       <div class="bg-white rounded-3xl shadow-sm border overflow-hidden">
         <table class="w-full text-left font-bold border-collapse">
           <thead class="bg-slate-50 border-b text-slate-400 text-xs uppercase">
             <tr class="divide-x">
               <th class="p-4">時間</th>
-              <th class="p-4 text-center">取單號</th>
+              <th class="p-4 text-center">取單號 / 明細</th>
               <th class="p-4 text-right">金額</th>
+              <th class="p-4 text-center">狀態</th>
               <th class="p-4 text-center">操作</th>
             </tr>
           </thead>
@@ -172,9 +231,16 @@
         <input type="text" id="cfgStoreName" placeholder="自定義店名" class="w-full p-4 rounded-2xl border font-bold">
         <input type="text" id="cfgPhone" placeholder="收據聯絡電話" class="w-full p-4 rounded-2xl border font-bold">
         <input type="text" id="cfgNote" placeholder="收據底部訊息" class="w-full p-4 rounded-2xl border font-bold">
-        <button id="saveSettingsBtn" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black active:scale-95 transition">儲存雲端設定</button>
+
+        <div class="flex gap-2">
+          <button id="saveSettingsBtn" class="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-black active:scale-95 transition">儲存雲端設定</button>
+          <button id="openShiftAdminBtn" class="flex-1 bg-emerald-600 text-white py-4 rounded-2xl font-black active:scale-95 transition">開班</button>
+          <button id="closeShiftAdminBtn" class="flex-1 bg-rose-600 text-white py-4 rounded-2xl font-black active:scale-95 transition">關班</button>
+        </div>
+
         <div class="text-xs text-slate-400 font-bold">
-          Print Agent 要監聽同一個 Store ID 才會印。
+          Print Agent 要監聽同一個 Store ID 才會印。<br>
+          班別：未開班時禁止結帳（避免帳務亂掉）。
         </div>
       </section>
 
@@ -193,10 +259,8 @@
   </div>
 </main>
 
-<!-- 不直接 print，但保留 -->
 <div id="printArea"></div>
 
-<!-- ✅ 修正：Toast 提示（取代 alert，避免 iPad 假死） -->
 <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-2xl font-black shadow-2xl hidden z-[9999]"></div>
 
 <script>
@@ -204,14 +268,12 @@
      Utilities (ES5-safe)
   ----------------------------- */
   function padLeft(num, len) { var s = String(num); while (s.length < len) s = '0' + s; return s; }
-  function safeText(el, text) { el.textContent = String(text !== undefined && text !== null ? text : ''); }
+  function safeText(el, text) { if (!el) return; el.textContent = String(text !== undefined && text !== null ? text : ''); }
   function escapeHTML(str) {
     str = String(str !== undefined && str !== null ? str : '');
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
   }
-  function todayKeyISO() { return new Date().toISOString().split('T')[0]; }
   function fmtMoney(n) { n = Number(n || 0); try { return n.toLocaleString(); } catch(e) { return String(n); } }
-
   function showToast(msg) {
     var t = document.getElementById('toast');
     if (!t) return;
@@ -219,14 +281,12 @@
     t.classList.remove('hidden');
     setTimeout(function(){ t.classList.add('hidden'); }, 1800);
   }
-
   function sidebarToggle(open) {
     var sb = document.getElementById('sidebar');
     var ov = document.getElementById('sidebarOverlay');
     if (open) { sb.classList.add('sidebar-active'); ov.classList.remove('hidden'); }
     else { sb.classList.remove('sidebar-active'); ov.classList.add('hidden'); }
   }
-
   function changeTab(id) {
     var tabs = document.querySelectorAll('.tab-content');
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
@@ -234,11 +294,42 @@
     if (id === 'reportTab') renderReportUI();
     sidebarToggle(false);
   }
-
   function snapToArrayWithKey(snap) {
     var out = [];
     snap.forEach(function(child){ var v = child.val() || {}; v.__key = child.key; out.push(v); });
     return out;
+  }
+
+  function toLocalInputValue(dateObj) {
+    // datetime-local 需要 YYYY-MM-DDTHH:mm
+    var d = dateObj;
+    var yyyy = d.getFullYear();
+    var mm = padLeft(d.getMonth()+1,2);
+    var dd = padLeft(d.getDate(),2);
+    var hh = padLeft(d.getHours(),2);
+    var mi = padLeft(d.getMinutes(),2);
+    return yyyy + '-' + mm + '-' + dd + 'T' + hh + ':' + mi;
+  }
+  function parseLocalInputValue(v) {
+    // v: YYYY-MM-DDTHH:mm
+    if (!v) return null;
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return null;
+    return d;
+  }
+
+  function summarizeItems(items) {
+    // 回傳 "烤魚x2, 白飯x1"
+    if (!items || !items.length) return '';
+    var map = {};
+    for (var i=0;i<items.length;i++){
+      var n = items[i].name || '';
+      if (!n) continue;
+      map[n] = (map[n] || 0) + 1;
+    }
+    var parts = [];
+    for (var k in map) if (map.hasOwnProperty(k)) parts.push(k + 'x' + map[k]);
+    return parts.join(', ');
   }
 
   /* -----------------------------
@@ -261,11 +352,20 @@
      State
   ----------------------------- */
   var settings = { storeId: 'default', storeName: '南屯任烤魚', phone: '02-1234', note: '謝謝惠顧' };
-  var menu = [];      // [{id,name,price,stock}]
-  var sales = [];     // [{... , __key}]
-  var kdsOrders = []; // [{... , __key}]
-  var cart = [];      // [{menuId,name,price}]
+  var menu = [];
+  var sales = [];
+  var kdsOrders = [];
+  var cart = [];
   var busyCheckout = false;
+
+  // Shift
+  var currentShiftId = null;
+  var shifts = []; // [{__key, openedAt, closedAt, status}]
+  var reportFilter = {
+    shiftId: '', // '' = all
+    start: null,
+    end: null
+  };
 
   /* -----------------------------
      Cloud print queue
@@ -284,10 +384,83 @@
   }
 
   /* -----------------------------
-     Transactions (Queue & Stock)
+     Shift logic
   ----------------------------- */
-  function nextQueueNoTx(dateKey) {
-    var ref = db.ref('dailyCounters/' + dateKey + '/queue');
+  function setShiftUI() {
+    var badge = document.getElementById('shiftBadge');
+    if (badge) badge.classList.remove('hidden');
+
+    var statusText = currentShiftId ? ('開班中 #' + currentShiftId.slice(-6)) : '未開班';
+    safeText(document.getElementById('shiftStatusText'), statusText);
+    safeText(document.getElementById('shiftLineText'), currentShiftId ? ('開班中（班別 #' + currentShiftId.slice(-6) + '）') : '未開班（請到「報表」或「設定」開班）');
+    safeText(document.getElementById('reportShiftStatus'), currentShiftId ? ('開班中 #' + currentShiftId.slice(-6)) : '未開班');
+
+    // 未開班時 queue 預覽顯示 ---
+    if (!currentShiftId) safeText(document.getElementById('nextQueueNo'), '---');
+  }
+
+  function openShift() {
+    if (currentShiftId) { showToast('已開班，不要重複開'); return; }
+    var now = new Date().toISOString();
+    var ref = db.ref('shifts').push();
+    var shiftId = ref.key;
+
+    // 建立 shift + 設定目前班別 + 初始化 counter
+    return ref.set({ openedAt: now, closedAt: '', status: 'OPEN' })
+      .then(function(){
+        return db.ref('runtime/currentShiftId').set(shiftId);
+      })
+      .then(function(){
+        return db.ref('shiftCounters/' + shiftId + '/queue').set(0);
+      })
+      .then(function(){
+        showToast('開班完成');
+      })
+      .catch(function(err){
+        showToast('開班失敗：' + (err && err.message ? err.message : err));
+      });
+  }
+
+  function closeShift() {
+    if (!currentShiftId) { showToast('目前未開班'); return; }
+    var now = new Date().toISOString();
+    var sid = currentShiftId;
+
+    // 關班：更新 shift + 清空 currentShiftId
+    return db.ref('shifts/' + sid).update({ closedAt: now, status: 'CLOSED' })
+      .then(function(){
+        return db.ref('runtime/currentShiftId').set(null);
+      })
+      .then(function(){
+        showToast('關班完成');
+      })
+      .catch(function(err){
+        showToast('關班失敗：' + (err && err.message ? err.message : err));
+      });
+  }
+
+  /* -----------------------------
+     Queue number transaction by shift
+  ----------------------------- */
+  var queueCounterUnsubRef = null;
+  function listenShiftQueuePreview(shiftId) {
+    // 移除舊 listener
+    if (queueCounterUnsubRef) {
+      queueCounterUnsubRef.off();
+      queueCounterUnsubRef = null;
+    }
+    if (!shiftId) { safeText(document.getElementById('nextQueueNo'), '---'); return; }
+
+    var ref = db.ref('shiftCounters/' + shiftId + '/queue');
+    queueCounterUnsubRef = ref;
+    ref.on('value', function(snap){
+      var cur = Number(snap.val() || 0);
+      safeText(document.getElementById('nextQueueNo'), padLeft(cur + 1, 3));
+    });
+  }
+
+  function nextQueueNoTx(shiftId) {
+    var ref = db.ref('shiftCounters/' + shiftId + '/queue');
     return ref.transaction(function(cur){ return (cur || 0) + 1; })
       .then(function(res){
         if (!res.committed) throw new Error('Queue transaction failed');
@@ -299,8 +472,8 @@
     qty = qty || 1;
     var ref = db.ref('menu/' + menuId + '/stock');
     return ref.transaction(function(cur){
-      if (cur === null) return;       // cancel
-      if (cur < qty) return;          // cancel
+      if (cur === null) return;
+      if (cur < qty) return;
       return cur - qty;
     }).then(function(res){ return !!res.committed; });
   }
@@ -433,14 +606,58 @@
     }
   }
 
-  function renderReportUI() {
-    var today = todayKeyISO();
-    var filtered = [];
-    for (var i = 0; i < sales.length; i++) {
-      var d = (sales[i].date || '').split('T')[0];
-      if (d === today) filtered.push(sales[i]);
+  function renderShiftSelect() {
+    var sel = document.getElementById('shiftSelect');
+    if (!sel) return;
+
+    var html = '<option value="">全部班別</option>';
+    // 新的在上
+    for (var i = shifts.length - 1; i >= 0; i--) {
+      var s = shifts[i];
+      var label = '';
+      var openT = s.openedAt ? new Date(s.openedAt) : null;
+      var closeT = s.closedAt ? new Date(s.closedAt) : null;
+
+      var openText = openT && !isNaN(openT.getTime()) ? openT.toLocaleString() : '未知時間';
+      var closeText = (closeT && !isNaN(closeT.getTime())) ? closeT.toLocaleString() : (s.status === 'OPEN' ? '開班中' : '');
+
+      label = '#' + String(s.__key).slice(-6) + ' | ' + openText + (closeText ? (' → ' + closeText) : '');
+      html += '<option value="' + escapeHTML(s.__key) + '">' + escapeHTML(label) + '</option>';
     }
-    filtered.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+    sel.innerHTML = html;
+
+    // 優先選：目前班別，否則維持原 filter
+    if (currentShiftId) sel.value = currentShiftId;
+    else if (reportFilter.shiftId) sel.value = reportFilter.shiftId;
+    else sel.value = '';
+  }
+
+  function getFilteredSales() {
+    var out = [];
+    var shiftId = reportFilter.shiftId || '';
+    var start = reportFilter.start;
+    var end = reportFilter.end;
+
+    for (var i = 0; i < sales.length; i++) {
+      var s = sales[i] || {};
+      if ((s.status || 'OK') === 'VOID') continue;
+
+      if (shiftId && s.shiftId !== shiftId) continue;
+
+      var dt = new Date(s.date);
+      if (isNaN(dt.getTime())) continue;
+
+      if (start && dt < start) continue;
+      if (end && dt > end) continue;
+
+      out.push(s);
+    }
+    out.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+    return out;
+  }
+
+  function renderReportUI() {
+    var filtered = getFilteredSales();
 
     var revenue = 0;
     for (var r = 0; r < filtered.length; r++) revenue += Number(filtered[r].total || 0);
@@ -456,19 +673,34 @@
       try { timeText = new Date(s.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
       catch(e) { timeText = new Date(s.date).toLocaleTimeString(); }
 
+      var detail = summarizeItems(s.items || []);
+
       html += ''
         + '<tr>'
         +   '<td class="p-6 text-blue-600 font-black">' + escapeHTML(timeText) + '</td>'
-        +   '<td class="p-6 text-center text-2xl font-black">#' + escapeHTML(s.queueNo) + '</td>'
+        +   '<td class="p-6 text-center">'
+        +     '<div class="text-2xl font-black">#' + escapeHTML(s.queueNo || '---') + '</div>'
+        +     '<div class="text-xs text-slate-400 font-black mt-1 break-words">' + escapeHTML(detail || '（無明細）') + '</div>'
+        +   '</td>'
         +   '<td class="p-6 text-right font-black text-2xl">$' + fmtMoney(s.total) + '</td>'
-        +   '<td class="p-6 text-center"><button class="void-btn text-red-500 font-black border-2 border-red-50 px-4 py-1 rounded-xl active:bg-red-50 transition" data-orderid="' + escapeHTML(s.orderId) + '">作廢</button></td>'
+        +   '<td class="p-6 text-center">'
+        +     '<span class="px-3 py-1 rounded-xl text-xs font-black ' + ((s.status||'OK')==='OK' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700') + '">'
+        +       escapeHTML((s.status||'OK')==='OK' ? '正常' : '作廢')
+        +     '</span>'
+        +   '</td>'
+        +   '<td class="p-6 text-center">'
+        +     '<button class="void-btn text-red-500 font-black border-2 border-red-50 px-4 py-1 rounded-xl active:bg-red-50 transition" data-key="' + escapeHTML(s.__key) + '">作廢</button>'
+        +   '</td>'
         + '</tr>';
     }
     body.innerHTML = html;
 
     var voidBtns = body.querySelectorAll('.void-btn');
     for (var vb = 0; vb < voidBtns.length; vb++) {
-      voidBtns[vb].addEventListener('click', function(){ voidOrder(this.getAttribute('data-orderid')); });
+      voidBtns[vb].addEventListener('click', function(){
+        var key = this.getAttribute('data-key');
+        voidOrderByKey(key);
+      });
     }
   }
 
@@ -482,11 +714,6 @@
       var s = diff % 60;
       els[i].textContent = padLeft(m, 2) + ':' + padLeft(s, 2);
     }
-  }
-
-  function updateQueueDisplayFromCounter(counterVal) {
-    var next = Number(counterVal || 0) + 1;
-    document.getElementById('nextQueueNo').innerText = padLeft(next, 3);
   }
 
   /* -----------------------------
@@ -565,16 +792,19 @@
   }
 
   function exportToExcel() {
+    var filtered = getFilteredSales();
     var rows = [];
-    for (var i = 0; i < sales.length; i++) {
-      var s = sales[i];
-      var itemsText = '';
-      if (s.items && s.items.length) {
-        var names = [];
-        for (var k = 0; k < s.items.length; k++) names.push(s.items[k].name);
-        itemsText = names.join(',');
-      }
-      rows.push({ '時間': s.date, '單號': s.orderId, '取單號': s.queueNo, '總額': s.total, '內容': itemsText });
+    for (var i = 0; i < filtered.length; i++) {
+      var s = filtered[i];
+      rows.push({
+        '時間': s.date,
+        '班別': s.shiftId ? String(s.shiftId).slice(-6) : '',
+        '取單號': s.queueNo,
+        '單號': s.orderId,
+        '總額': s.total,
+        '明細': summarizeItems(s.items || []),
+        '狀態': (s.status || 'OK')
+      });
     }
     var ws = XLSX.utils.json_to_sheet(rows);
     var wb = XLSX.utils.book_new();
@@ -583,70 +813,79 @@
   }
 
   /* -----------------------------
-     Void order (restock + delete)
+     Void order: mark VOID + restock + remove KDS
   ----------------------------- */
-  function voidOrder(oId) {
-    if (!oId) return;
-    if (!confirm('確認作廢此訂單？庫存將回補雲端。')) return;
+  function voidOrderByKey(salesKey) {
+    if (!salesKey) return;
+    if (!confirm('確認作廢此訂單？庫存將回補，報表保留作廢紀錄。')) return;
 
-    db.ref('sales').orderByChild('orderId').equalTo(oId).once('value')
-      .then(function(snap){
-        if (!snap.exists()) return;
+    var ref = db.ref('sales/' + salesKey);
+    ref.once('value').then(function(snap){
+      if (!snap.exists()) return;
 
-        var promises = [];
-        snap.forEach(function(child){
-          var order = child.val() || {};
-          var items = order.items || [];
+      var order = snap.val() || {};
+      if ((order.status || 'OK') === 'VOID') {
+        showToast('此單已作廢');
+        return;
+      }
 
-          var cm = {};
-          for (var i = 0; i < items.length; i++) {
-            if (!items[i].menuId) continue;
-            cm[items[i].menuId] = (cm[items[i].menuId] || 0) + 1;
-          }
+      var items = order.items || [];
+      var cm = {};
+      for (var i=0;i<items.length;i++){
+        if (!items[i].menuId) continue;
+        cm[items[i].menuId] = (cm[items[i].menuId] || 0) + 1;
+      }
 
-          for (var mid in cm) if (cm.hasOwnProperty(mid)) promises.push(incStockTx(mid, cm[mid]));
-          promises.push(child.ref.remove());
-        });
+      var promises = [];
+      for (var mid in cm) if (cm.hasOwnProperty(mid)) promises.push(incStockTx(mid, cm[mid]));
+      promises.push(ref.update({ status: 'VOID', voidedAt: new Date().toISOString() }));
 
-        return Promise.all(promises);
-      })
-      .catch(function(err){ showToast('作廢失敗：' + (err && err.message ? err.message : err)); });
+      // 移除 KDS（新寫法會用 orderId 做 key，舊資料不影響）
+      if (order.orderId) {
+        promises.push(db.ref('kdsByOrderId/' + order.orderId).remove().catch(function(){}));
+      }
+
+      return Promise.all(promises).then(function(){
+        showToast('作廢完成（已回補庫存）');
+      });
+    }).catch(function(err){
+      showToast('作廢失敗：' + (err && err.message ? err.message : err));
+    });
   }
 
   /* -----------------------------
      Checkout (Cloud Print) + Watchdog
-     ✅ 修正：避免 iPad 結帳後「看起來卡死」
-     - 不用 alert（用 toast）
-     - watchdog 超時自動解鎖按鈕
-     - overlay 一律關掉
   ----------------------------- */
   function cleanupCheckout(btn, watchdogTimer) {
     if (watchdogTimer) clearTimeout(watchdogTimer);
     busyCheckout = false;
     btn.disabled = false;
     btn.classList.remove('opacity-60');
-    sidebarToggle(false); // ✅ 修正：不管怎樣先把遮罩收掉
+    sidebarToggle(false);
   }
 
   function processCheckout() {
     if (busyCheckout) return;
     if (cart.length === 0) return;
 
+    // 未開班禁止結帳
+    if (!currentShiftId) {
+      showToast('尚未開班，請先開班再結帳');
+      return;
+    }
+
     busyCheckout = true;
     var btn = document.getElementById('checkoutBtn');
     btn.disabled = true;
     btn.classList.add('opacity-60');
 
-    // ✅ 修正：看門狗，避免 Firebase 卡住導致永遠鎖死
     var watchdog = setTimeout(function(){
       busyCheckout = false;
       btn.disabled = false;
       btn.classList.remove('opacity-60');
       sidebarToggle(false);
       showToast('結帳逾時，已解除鎖定（請檢查網路/雲端）');
-    }, 8000);
-
-    var dateKey = todayKeyISO();
+    }, 9000);
 
     // count map by menuId
     var countMap = {};
@@ -654,18 +893,18 @@
       var id = cart[i].menuId;
       countMap[id] = (countMap[id] || 0) + 1;
     }
-
     var menuIds = [];
     for (var k in countMap) if (countMap.hasOwnProperty(k)) menuIds.push(k);
 
     var now = new Date();
-    var oId = String(Date.now()).slice(-6);
+    var oId = String(Date.now()); // 用長單號降低碰撞
     var total = 0;
     for (var t = 0; t < cart.length; t++) total += Number(cart[t].price || 0);
 
     var qNo = null;
+    var sid = currentShiftId;
 
-    nextQueueNoTx(dateKey)
+    nextQueueNoTx(sid)
       .then(function(queueNo){
         qNo = queueNo;
 
@@ -687,12 +926,29 @@
           throw new Error('STOCK_NOT_ENOUGH');
         }
 
-        var oData = { date: now.toISOString(), total: total, queueNo: qNo, orderId: oId, items: cart.slice() };
+        var oData = {
+          date: now.toISOString(),
+          total: total,
+          queueNo: qNo,
+          orderId: oId,
+          shiftId: sid,
+          status: 'OK',
+          items: cart.slice(),
+          itemSummary: summarizeItems(cart)
+        };
 
+        // sales: 用 push（保留歷史）
         return db.ref('sales').push(oData)
-          .then(function(){ return db.ref('kds').push({ queueNo: qNo, items: cart.slice(), time: now.toISOString(), orderId: oId }); })
+          .then(function(res){
+            // KDS：用 orderId 做 key（作廢/完成更好處理）
+            return db.ref('kdsByOrderId/' + oId).set({
+              queueNo: qNo,
+              items: cart.slice(),
+              time: now.toISOString(),
+              orderId: oId
+            });
+          })
           .then(function(){
-            // build receipt html
             var printHtml = ''
               + '<div class="print-page" style="text-align:center;">'
               +   '<h2 style="margin:0;">' + escapeHTML(settings.storeName) + '</h2>'
@@ -723,7 +979,7 @@
               +   '</div>'
               + '</div>';
 
-            return enqueuePrintJob({ type: 'receipt', html: printHtml, meta: { queueNo: qNo, orderId: oId, total: total } });
+            return enqueuePrintJob({ type: 'receipt', html: printHtml, meta: { queueNo: qNo, orderId: oId, total: total, shiftId: sid } });
           });
       })
       .then(function(){
@@ -740,6 +996,48 @@
         }
         cleanupCheckout(btn, watchdog);
       });
+  }
+
+  /* -----------------------------
+     Report filter handlers
+  ----------------------------- */
+  function applyReportFilterFromUI() {
+    var sel = document.getElementById('shiftSelect');
+    var dtS = document.getElementById('dtStart');
+    var dtE = document.getElementById('dtEnd');
+
+    reportFilter.shiftId = sel ? (sel.value || '') : '';
+
+    var s = parseLocalInputValue(dtS ? dtS.value : '');
+    var e = parseLocalInputValue(dtE ? dtE.value : '');
+    reportFilter.start = s;
+    reportFilter.end = e;
+
+    renderReportUI();
+    showToast('報表已套用篩選');
+  }
+
+  function resetReportFilterUI() {
+    reportFilter.shiftId = '';
+    reportFilter.start = null;
+    reportFilter.end = null;
+
+    var sel = document.getElementById('shiftSelect');
+    if (sel) sel.value = currentShiftId || '';
+
+    // 預設：如果有班別，就用班別開始到現在；沒有就今天 00:00 到現在
+    var now = new Date();
+    var s = new Date();
+    s.setHours(0,0,0,0);
+    document.getElementById('dtStart').value = toLocalInputValue(s);
+    document.getElementById('dtEnd').value = toLocalInputValue(now);
+
+    reportFilter.start = s;
+    reportFilter.end = now;
+    reportFilter.shiftId = currentShiftId || '';
+
+    renderReportUI();
+    showToast('報表篩選已重置');
   }
 
   /* -----------------------------
@@ -762,6 +1060,18 @@
     document.getElementById('addProductBtn').addEventListener('click', addProduct);
     document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
 
+    // shift actions (3 places)
+    document.getElementById('openShiftBtn').addEventListener('click', openShift);
+    document.getElementById('closeShiftBtn').addEventListener('click', closeShift);
+    document.getElementById('openShiftAdminBtn').addEventListener('click', openShift);
+    document.getElementById('closeShiftAdminBtn').addEventListener('click', closeShift);
+    document.getElementById('openShiftMiniBtn').addEventListener('click', openShift);
+    document.getElementById('closeShiftMiniBtn').addEventListener('click', closeShift);
+
+    // report filter buttons
+    document.getElementById('applyReportFilterBtn').addEventListener('click', applyReportFilterFromUI);
+    document.getElementById('resetReportFilterBtn').addEventListener('click', resetReportFilterUI);
+
     // settings sync
     db.ref('settings').on('value', function(snap){
       if (!snap.exists()) return;
@@ -776,6 +1086,34 @@
       document.getElementById('cfgStoreName').value = settings.storeName || '';
       document.getElementById('cfgPhone').value = settings.phone || '';
       document.getElementById('cfgNote').value = settings.note || '';
+    });
+
+    // shift current id sync
+    db.ref('runtime/currentShiftId').on('value', function(snap){
+      currentShiftId = snap.val() || null;
+      setShiftUI();
+      listenShiftQueuePreview(currentShiftId);
+
+      // report 預設 shift
+      var sel = document.getElementById('shiftSelect');
+      if (sel && currentShiftId) sel.value = currentShiftId;
+
+      // 沒篩選時，預設填時間
+      // 若你已經手動改過，重置按鈕才會覆蓋
+      if (!document.getElementById('dtStart').value) {
+        var now = new Date();
+        var s = new Date(); s.setHours(0,0,0,0);
+        document.getElementById('dtStart').value = toLocalInputValue(s);
+        document.getElementById('dtEnd').value = toLocalInputValue(now);
+        reportFilter.start = s;
+        reportFilter.end = now;
+      }
+    });
+
+    // shifts list sync (recent)
+    db.ref('shifts').limitToLast(100).on('value', function(snap){
+      shifts = snapToArrayWithKey(snap);
+      renderShiftSelect();
     });
 
     // menu sync
@@ -805,18 +1143,12 @@
       if (document.getElementById('reportTab').classList.contains('active')) renderReportUI();
     });
 
-    // kds sync
-    db.ref('kds').on('value', function(snap){
+    // kds sync (新的路徑)
+    db.ref('kdsByOrderId').on('value', function(snap){
       var arr = snapToArrayWithKey(snap);
       arr.sort(function(a,b){ return new Date(a.time) - new Date(b.time); });
       kdsOrders = arr;
       renderKDSUI();
-    });
-
-    // queue preview
-    var dateKey = todayKeyISO();
-    db.ref('dailyCounters/' + dateKey + '/queue').on('value', function(snap){
-      updateQueueDisplayFromCounter(snap.val() || 0);
     });
 
     // clock/timers
@@ -824,6 +1156,7 @@
     setInterval(refreshKDSTimers, 1000);
 
     renderCartUI();
+    setShiftUI();
   }
 
   init();
