@@ -8,26 +8,31 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
     <style>
-        /* --- [1. 全域樣式開始] --- */
-        body { font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
-        .tab-content { display: none; } 
-        .tab-content.active { display: flex; } 
-        #printArea { display: none; }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+/* --- [1. 全域樣式修正區] --- */
+body { 
+    font-family: -apple-system, sans-serif; 
+    -webkit-tap-highlight-color: transparent; /* 移除 iPad 點擊時的藍色高亮 */
+    touch-action: manipulation; /* 優化觸控反應速度，移除點擊延遲 */
+}
 
-        /* 手機版側邊欄層級 */
-        .sidebar-active { transform: translateX(0) !important; z-index: 100 !important; }
-        .z-top { z-index: 110 !important; }
+/* 修正側邊欄在 iPad 上的顯示邏輯 */
+#sidebar {
+    pointer-events: none; /* 預設關閉時，不攔截點擊事件 */
+    visibility: hidden;
+}
 
-        @media print {
-            body * { visibility: hidden !important; }
-            #printArea { display: block !important; visibility: visible !important; position: absolute; left: 0; top: 0; width: 57mm; }
-            #printArea * { visibility: visible !important; }
-            .print-page { page-break-after: always; width: 57mm; padding: 2mm; color: black; font-family: monospace; }
-            @page { margin: 0; }
-        }
-        /* --- [1. 全域樣式結束] --- */
+#sidebar.sidebar-active {
+    pointer-events: auto; /* 開啟時，恢復點擊功能 */
+    visibility: visible;
+    transform: translateX(0) !important;
+    z-index: 200 !important; /* 確保高於一切 */
+}
+
+/* 確保手機版浮動按鈕永遠可被點擊 */
+#mobileCartBtn {
+    z-index: 150 !important;
+    cursor: pointer;
+}
     </style>
 </head>
 <body class="bg-slate-50 h-screen flex flex-col overflow-hidden text-slate-800">
