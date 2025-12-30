@@ -41,15 +41,51 @@
     }
 
     @media print {
-      body * { visibility: hidden !important; }
-      #printArea, #printArea * { visibility: visible !important; color: black !important; }
-      #printArea { position: absolute; left: 0; top: 0; width: 52mm; margin: 0; padding: 0; }
-      .print-page { width: 100%; font-family: monospace; font-size: 12pt; line-height: 1.2; page-break-after: always; padding: 2mm; }
-      .print-page h1 { font-size: 24pt !important; font-weight: 900 !important; margin: 2mm 0; }
-      .print-page h2 { font-size: 16pt !important; font-weight: bold !important; }
-      hr { border: none; border-top: 1px dashed black !important; margin: 2mm 0; }
-    }
-  </style>
+  @page {
+    size: 58mm auto;      /* 58mm 寬，高度自動 */
+    margin: 0;            /* 不要邊界 */
+  }
+
+  html, body {
+    width: 58mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body * { visibility: hidden !important; }
+
+  #printArea, #printArea * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color: #000 !important;
+  }
+
+  #printArea {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 58mm;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-page {
+    width: 58mm;
+    padding: 2mm;         /* 小票內距 */
+    font-family: monospace;
+    font-size: 11pt;
+    line-height: 1.2;
+  }
+
+  .print-page h1 { font-size: 22pt !important; margin: 2mm 0; }
+  .print-page h2 { font-size: 14pt !important; margin: 0; }
+
+  hr { border: none; border-top: 1px dashed #000 !important; margin: 2mm 0; }
+}
+
 </head>
 
 <body class="h-screen flex flex-col">
